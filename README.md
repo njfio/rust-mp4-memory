@@ -1,11 +1,11 @@
 # Rust MemVid 🦀📹
 
-A complete Rust implementation of the [MemVid](https://github.com/Olow304/memvid) library - a revolutionary video-based AI memory system that stores text chunks as QR codes in video files with lightning-fast semantic search.
+A complete Rust implementation of the [MemVid](https://github.com/Olow304/memvid) library - a revolutionary video-based AI memory system that stores text chunks as QR codes in video files with lightning-fast semantic search and **temporal analysis capabilities**.
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-## 🌟 Features
+## 🌟 Core Features
 
 - **🎥 Video-as-Database**: Store millions of text chunks in MP4 files
 - **🔍 Semantic Search**: Find relevant content using natural language queries with embeddings
@@ -18,6 +18,17 @@ A complete Rust implementation of the [MemVid](https://github.com/Olow304/memvid
 - **🔧 Multiple Codecs**: H.264, H.265, AV1, VP9 support via FFmpeg
 - **🌐 Offline-First**: No internet required after video generation
 - **⚡ High Performance**: Parallel processing and optimized algorithms
+
+## 🕰️ **NEW: Temporal Analysis & Memory Comparison**
+
+**Revolutionary features that transform MemVid from simple storage into a complete knowledge evolution platform:**
+
+- **🔍 Memory Diff Engine**: Compare any two memory videos with detailed chunk-level analysis
+- **🔎 Multi-Memory Search**: Search across multiple memory videos simultaneously
+- **📈 Temporal Analysis**: Track memory evolution over time with trend analysis
+- **🔗 Cross-Memory Correlations**: Find relationships between different memory snapshots
+- **📊 Knowledge Gap Detection**: Identify areas needing attention or updates
+- **🎯 Activity Period Analysis**: Detect growth, revision, and consolidation phases
 
 ## 🚀 Quick Start
 
@@ -105,6 +116,127 @@ memvid info --video memory.mp4 --index memory.json
 
 # Extract specific frame
 memvid extract --video memory.mp4 --frame 42
+
+# Compare two memory videos (NEW!)
+memvid diff old_memory.mp4 old_memory.metadata new_memory.mp4 new_memory.metadata \
+  --output diff_report.json --semantic
+
+# Search across multiple memories (NEW!)
+memvid multi-search "machine learning" memories.json \
+  --top-k 10 --correlations --temporal --tags research
+```
+
+## 🕰️ Temporal Analysis & Memory Comparison
+
+### Memory Diff Analysis
+
+Compare any two memory videos to see exactly what changed:
+
+```bash
+# Basic comparison
+memvid diff old_project.mp4 old_project.metadata new_project.mp4 new_project.metadata
+
+# With semantic analysis and detailed output
+memvid diff research_v1.mp4 research_v1.metadata research_v2.mp4 research_v2.metadata \
+  --output detailed_diff.json --semantic
+```
+
+**Example Output:**
+```
+🔍 Memory Comparison Results
+============================
+Old memory: research_v1.mp4
+New memory: research_v2.mp4
+
+📊 Summary:
+   • Old chunks: 150
+   • New chunks: 203
+   • Added: 75 chunks
+   • Removed: 22 chunks
+   • Modified: 18 chunks
+   • Unchanged: 110 chunks
+   • Similarity: 72.5%
+   • Growth ratio: 1.35x
+```
+
+### Multi-Memory Search
+
+Search across multiple memory videos simultaneously:
+
+```bash
+# Create memories configuration
+cat > memories.json << EOF
+[
+  {
+    "name": "research_v1",
+    "video_path": "research_v1.mp4",
+    "index_path": "research_v1.metadata",
+    "tags": ["research", "initial"],
+    "description": "Initial research phase"
+  },
+  {
+    "name": "research_v2",
+    "video_path": "research_v2.mp4",
+    "index_path": "research_v2.metadata",
+    "tags": ["research", "enhanced"],
+    "description": "Enhanced research with new findings"
+  }
+]
+EOF
+
+# Search across all memories
+memvid multi-search "neural networks" memories.json --correlations --temporal
+
+# Filter by tags
+memvid multi-search "methodology" memories.json --tags enhanced
+```
+
+### Programmatic Temporal Analysis
+
+```rust
+use rust_mem_vid::{
+    memory_diff::MemoryDiffEngine,
+    multi_memory::MultiMemoryEngine,
+    temporal_analysis::TemporalAnalysisEngine
+};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = Config::default();
+
+    // Compare two memories
+    let diff_engine = MemoryDiffEngine::new(config.clone())
+        .with_semantic_analysis(true);
+
+    let diff = diff_engine.compare_memories(
+        "old_memory.mp4", "old_memory.metadata",
+        "new_memory.mp4", "new_memory.metadata"
+    ).await?;
+
+    println!("Added {} chunks, modified {} chunks",
+             diff.summary.added_count, diff.summary.modified_count);
+
+    // Multi-memory search
+    let mut multi_engine = MultiMemoryEngine::new(config.clone());
+    multi_engine.add_memory("v1", "v1.mp4", "v1.metadata",
+                           vec!["version_1".to_string()], None).await?;
+    multi_engine.add_memory("v2", "v2.mp4", "v2.metadata",
+                           vec!["version_2".to_string()], None).await?;
+
+    let results = multi_engine.search_all("machine learning", 10, true, true).await?;
+    println!("Found {} results across {} memories",
+             results.total_results, results.search_metadata.memories_searched);
+
+    // Temporal analysis
+    let temporal_engine = TemporalAnalysisEngine::new(config);
+    let snapshot = temporal_engine.create_snapshot(
+        "memory.mp4", "memory.metadata",
+        Some("Project milestone".to_string()),
+        vec!["milestone".to_string()]
+    ).await?;
+
+    Ok(())
+}
 ```
 
 ## 📖 Examples
@@ -323,6 +455,7 @@ model = "claude-3-sonnet-20240229"
 
 ## 🎯 Use Cases
 
+### Traditional Memory Storage
 - **📖 Digital Libraries**: Index thousands of books in a single video file
 - **🎓 Educational Content**: Create searchable video memories of course materials
 - **📰 Research Archives**: Compress years of papers into manageable video databases
@@ -334,11 +467,24 @@ model = "claude-3-sonnet-20240229"
 - **📋 Log Analysis**: Process and search through application logs efficiently
 - **🏢 Business Intelligence**: Create searchable repositories of structured data
 
+### 🕰️ Temporal Analysis & Evolution Tracking
+- **🔬 Research Project Evolution**: Track how research develops from proposal to publication
+- **📚 Knowledge Base Maintenance**: Monitor content quality and identify knowledge gaps
+- **👥 Team Collaboration**: Merge insights from multiple team members' memories
+- **📈 Content Quality Assessment**: Analyze how documentation improves over time
+- **🎯 Learning Progress Tracking**: Monitor personal knowledge growth and retention
+- **🏢 Organizational Memory**: Track institutional knowledge evolution
+- **📊 Information Decay Detection**: Identify outdated or conflicting information
+- **🔄 Version Control for Knowledge**: Git-like diff analysis for memory content
+- **🎓 Educational Assessment**: Track student understanding development
+- **💡 Innovation Tracking**: Monitor how ideas and concepts evolve in organizations
+
 ## 🏗️ Architecture
 
 The library consists of several key components:
 
-- **QR Processor**: Encodes/decodes text chunks to/from QR codes
+### Core Components
+- **QR Processor**: Encodes/decodes text chunks to/from QR codes with size optimization
 - **Video Encoder/Decoder**: Handles video creation and frame extraction using FFmpeg
 - **Embedding Model**: Generates semantic embeddings using transformer models
 - **Index Manager**: Manages vector search and metadata storage
@@ -346,6 +492,14 @@ The library consists of several key components:
 - **Data Processor**: Advanced processing for CSV, Parquet, JSON, and code files
 - **Code Analyzer**: Intelligent parsing and chunking of source code
 - **Chat Interface**: Integrates with LLM APIs for conversational search
+
+### 🕰️ Temporal Analysis Components
+- **Memory Diff Engine**: Compares memory videos with chunk-level analysis
+- **Multi-Memory Engine**: Manages and searches across multiple memory videos
+- **Temporal Analysis Engine**: Tracks memory evolution and identifies trends
+- **Correlation Detector**: Finds relationships between different memory snapshots
+- **Timeline Builder**: Creates comprehensive evolution timelines
+- **Knowledge Gap Analyzer**: Identifies areas needing attention or updates
 
 ## 🔧 Dependencies
 
@@ -419,7 +573,18 @@ cargo run --example basic_usage
 cargo run --example pdf_chat document.pdf
 cargo run --example data_demo
 cargo run --example folder_demo
+
+# NEW: Temporal analysis examples
+cargo run --example temporal_analysis_demo
+cargo run --example qr_size_test
 ```
+
+## 📚 Additional Documentation
+
+- **[TEMPORAL_ANALYSIS_FEATURES.md](TEMPORAL_ANALYSIS_FEATURES.md)** - Comprehensive guide to temporal analysis and memory comparison features
+- **[QR_SIZE_OPTIMIZATION.md](QR_SIZE_OPTIMIZATION.md)** - Guide to QR code size optimization and troubleshooting
+- **[examples/memories_config.json](examples/memories_config.json)** - Template for multi-memory search configuration
+- **[examples/temporal_analysis_demo.rs](examples/temporal_analysis_demo.rs)** - Working demonstration of all temporal features
 
 ## 🤝 Contributing
 
@@ -453,4 +618,19 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Ready to revolutionize your AI memory management with Rust? Install rust_mem_vid and start building!** 🚀
+## 🎉 What Makes This Special
+
+Rust MemVid isn't just another storage system - it's a **complete knowledge evolution platform**:
+
+- **📹 Each MP4 is a frozen snapshot** of your knowledge at a specific point in time
+- **🔍 Compare any two snapshots** to see exactly what changed with detailed diff analysis
+- **🔎 Search across multiple memories** simultaneously to find correlations and patterns
+- **📈 Track knowledge evolution** over time with sophisticated temporal analysis
+- **🎯 Identify knowledge gaps** and optimization opportunities automatically
+- **👥 Enable collaborative knowledge building** with team memory merging
+
+**Transform from simple storage to intelligent knowledge evolution tracking!**
+
+---
+
+**Ready to revolutionize your AI memory management with temporal analysis? Install rust_mem_vid and start building the future of knowledge management!** 🚀🕰️
