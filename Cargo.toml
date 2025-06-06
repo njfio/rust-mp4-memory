@@ -16,6 +16,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4.0", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -130,6 +131,10 @@ path = "examples/comprehensive_demo.rs"
 [[example]]
 name = "qr_size_test"
 path = "examples/qr_size_test.rs"
+
+[[example]]
+name = "temporal_analysis_demo"
+path = "examples/temporal_analysis_demo.rs"
 
 [profile.release]
 opt-level = 3

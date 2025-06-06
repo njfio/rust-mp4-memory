@@ -57,6 +57,11 @@ pub mod text;
 pub mod error;
 pub mod utils;
 
+// New temporal and comparative analysis modules
+pub mod memory_diff;
+pub mod multi_memory;
+pub mod temporal_analysis;
+
 // Re-export main types
 pub use encoder::MemvidEncoder;
 pub use retriever::MemvidRetriever;
@@ -71,6 +76,11 @@ pub use folder::{FolderProcessor, FileInfo, FolderStats, SkipReason};
 pub use index::IndexManager;
 pub use text::{TextProcessor, ChunkMetadata};
 pub use video::{VideoEncoder, VideoDecoder, Codec};
+
+// Re-export temporal and comparative analysis types
+pub use memory_diff::{MemoryDiff, MemoryDiffEngine, DiffSummary, ChunkDiff, ChunkModification};
+pub use multi_memory::{MultiMemoryEngine, MultiMemorySearchResult, MemoryInfo, GlobalMemoryStats};
+pub use temporal_analysis::{MemorySnapshot, MemoryTimeline, TemporalAnalysisEngine, TimelineAnalysis};
 
 /// Version of the rust_mem_vid library
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

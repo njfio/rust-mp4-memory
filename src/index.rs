@@ -287,6 +287,20 @@ impl IndexManager {
         self.chunks.len()
     }
 
+    /// Get all chunks as TextChunk objects
+    pub fn get_all_chunks(&self) -> Vec<crate::text::TextChunk> {
+        let mut chunks = Vec::new();
+        for (chunk_id, metadata) in self.chunks.iter().enumerate() {
+            if let Some(text) = self.chunk_texts.get(&chunk_id) {
+                chunks.push(crate::text::TextChunk {
+                    content: text.clone(),
+                    metadata: metadata.clone(),
+                });
+            }
+        }
+        chunks
+    }
+
     /// Check if index is empty
     pub fn is_empty(&self) -> bool {
         self.chunks.is_empty()

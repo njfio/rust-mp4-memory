@@ -276,7 +276,7 @@ impl MemvidRetriever {
 }
 
 /// Retrieval result with metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RetrievalResult {
     pub chunk_id: usize,
     pub similarity: f32,

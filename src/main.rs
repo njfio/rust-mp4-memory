@@ -2,7 +2,7 @@
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
-use tracing::{info, error};
+use tracing::{info, error, warn};
 
 use rust_mem_vid::{
     MemvidEncoder, MemvidRetriever, MemvidChat, Config,
@@ -154,6 +154,44 @@ enum Commands {
         #[arg(short, long)]
         output: Option<String>,
     },
+
+    /// Compare two memory videos and generate a diff
+    Diff {
+        /// Old memory video file
+        old_video: String,
+        /// Old memory index file
+        old_index: String,
+        /// New memory video file
+        new_video: String,
+        /// New memory index file
+        new_index: String,
+        /// Output diff file (JSON format)
+        #[arg(short, long)]
+        output: Option<String>,
+        /// Enable semantic analysis
+        #[arg(long)]
+        semantic: bool,
+    },
+
+    /// Search across multiple memory videos
+    MultiSearch {
+        /// Search query
+        query: String,
+        /// Memory configuration file (JSON with memory paths and metadata)
+        memories_config: String,
+        /// Number of results to return
+        #[arg(short = 'k', long, default_value = "10")]
+        top_k: usize,
+        /// Enable cross-memory correlations
+        #[arg(long)]
+        correlations: bool,
+        /// Enable temporal analysis
+        #[arg(long)]
+        temporal: bool,
+        /// Filter by memory tags
+        #[arg(long)]
+        tags: Option<Vec<String>>,
+    },
 }
 
 #[tokio::main]
@@ -229,6 +267,28 @@ async fn main() -> anyhow::Result<()> {
             output,
         } => {
             extract_command(video, frame, output, config).await?;
+        }
+
+        Commands::Diff {
+            old_video,
+            old_index,
+            new_video,
+            new_index,
+            output,
+            semantic,
+        } => {
+            diff_command(old_video, old_index, new_video, new_index, output, semantic, config).await?;
+        }
+
+        Commands::MultiSearch {
+            query,
+            memories_config,
+            top_k,
+            correlations,
+            temporal,
+            tags,
+        } => {
+            multi_search_command(query, memories_config, top_k, correlations, temporal, tags, config).await?;
         }
     }
 
@@ -591,6 +651,129 @@ async fn extract_command(
                 println!("{}", decoded);
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn diff_command(
+    old_video: String,
+    old_index: String,
+    new_video: String,
+    new_index: String,
+    output: Option<String>,
+    semantic: bool,
+    config: Config,
+) -> anyhow::Result<()> {
+    use rust_mem_vid::memory_diff::MemoryDiffEngine;
+
+    info!("Comparing memories: {} vs {}", old_video, new_video);
+
+    let mut diff_engine = MemoryDiffEngine::new(config);
+    if semantic {
+        diff_engine = diff_engine.with_semantic_analysis(true);
+    }
+
+    let diff = diff_engine.compare_memories(&old_video, &old_index, &new_video, &new_index).await?;
+
+    // Print summary
+    println!("🔍 Memory Comparison Results");
+    println!("============================");
+    println!("Old memory: {}", old_video);
+    println!("New memory: {}", new_video);
+    println!();
+    println!("📊 Summary:");
+    println!("   • Old chunks: {}", diff.summary.total_old_chunks);
+    println!("   • New chunks: {}", diff.summary.total_new_chunks);
+    println!("   • Added: {} chunks", diff.summary.added_count);
+    println!("   • Removed: {} chunks", diff.summary.removed_count);
+    println!("   • Modified: {} chunks", diff.summary.modified_count);
+    println!("   • Unchanged: {} chunks", diff.summary.unchanged_count);
+    println!("   • Similarity: {:.1}%", diff.summary.similarity_score * 100.0);
+    println!("   • Growth ratio: {:.2}x", diff.summary.content_growth_ratio);
+
+    // Save detailed diff if requested
+    if let Some(output_path) = output {
+        let json = serde_json::to_string_pretty(&diff)?;
+        std::fs::write(&output_path, json)?;
+        println!("\n💾 Detailed diff saved to: {}", output_path);
+    }
+
+    Ok(())
+}
+
+async fn multi_search_command(
+    query: String,
+    memories_config: String,
+    top_k: usize,
+    correlations: bool,
+    temporal: bool,
+    tags: Option<Vec<String>>,
+    config: Config,
+) -> anyhow::Result<()> {
+    use rust_mem_vid::multi_memory::{MultiMemoryEngine, MemoryFilter};
+
+    info!("Multi-memory search for: '{}'", query);
+
+    // Load memories configuration
+    let config_content = std::fs::read_to_string(&memories_config)?;
+    let memories_list: Vec<serde_json::Value> = serde_json::from_str(&config_content)?;
+
+    let mut engine = MultiMemoryEngine::new(config);
+
+    // Add memories from configuration
+    for memory_config in memories_list {
+        let name = memory_config["name"].as_str().unwrap_or("unknown");
+        let video_path = memory_config["video_path"].as_str().unwrap();
+        let index_path = memory_config["index_path"].as_str().unwrap();
+        let memory_tags: Vec<String> = memory_config["tags"]
+            .as_array()
+            .unwrap_or(&Vec::new())
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect();
+        let description = memory_config["description"].as_str().map(|s| s.to_string());
+
+        match engine.add_memory(name, video_path, index_path, memory_tags, description).await {
+            Ok(_) => info!("Added memory: {}", name),
+            Err(e) => warn!("Failed to add memory {}: {}", name, e),
+        }
+    }
+
+    // Perform search
+    let filter = if let Some(tag_filter) = tags {
+        MemoryFilter::Tags(tag_filter)
+    } else {
+        MemoryFilter::All
+    };
+
+    let results = if matches!(filter, MemoryFilter::All) {
+        engine.search_all(&query, top_k, correlations, temporal).await?
+    } else {
+        engine.search_filtered(&query, top_k, filter).await?
+    };
+
+    // Display results
+    println!("🔍 Multi-Memory Search Results");
+    println!("==============================");
+    println!("Query: '{}'", query);
+    println!("Searched {} memories in {}ms",
+             results.search_metadata.memories_searched,
+             results.search_metadata.search_time_ms);
+    println!("Total results: {}", results.total_results);
+
+    // Show aggregated results
+    println!("\n📋 Top Results:");
+    for (i, result) in results.aggregated_results.iter().take(top_k).enumerate() {
+        println!("\n{}. [Similarity: {:.3}] [Memory: {}]",
+                 i + 1, result.similarity, result.source_memory);
+
+        let preview = if result.text.len() > 200 {
+            format!("{}...", &result.text[..200])
+        } else {
+            result.text.clone()
+        };
+        println!("   {}", preview);
     }
 
     Ok(())
