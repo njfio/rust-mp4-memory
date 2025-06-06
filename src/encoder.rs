@@ -13,6 +13,19 @@ use crate::qr::{QrProcessor, BatchQrProcessor};
 use crate::text::{TextProcessor, TextChunk};
 use crate::video::{VideoEncoder, Codec, VideoStats};
 
+/// Analysis of chunk sizes and optimization recommendations
+#[derive(Debug, Clone)]
+pub struct ChunkAnalysis {
+    pub total_chunks: usize,
+    pub total_characters: usize,
+    pub avg_chunk_size: usize,
+    pub max_chunk_size: usize,
+    pub min_chunk_size: usize,
+    pub recommended_size: usize,
+    pub oversized_chunks: usize,
+    pub needs_optimization: bool,
+}
+
 /// Main encoder for creating QR code videos from text
 pub struct MemvidEncoder {
     config: Config,
@@ -218,6 +231,54 @@ impl MemvidEncoder {
         self.build_video_with_codec(output_path, index_path, None).await
     }
 
+    /// Optimize chunk sizes for QR code compatibility
+    pub fn optimize_chunks_for_qr(&mut self) -> Result<()> {
+        let recommended_size = self.qr_processor.get_recommended_chunk_size()?;
+
+        info!("Optimizing chunks for QR codes. Recommended size: {} characters", recommended_size);
+
+        let mut optimized_chunks = Vec::new();
+
+        for chunk in &self.chunks {
+            if chunk.content.len() <= recommended_size {
+                // Chunk is already small enough
+                optimized_chunks.push(chunk.clone());
+            } else {
+                // Split large chunk into smaller ones
+                let content = &chunk.content;
+                let mut start = 0;
+                let mut chunk_id = optimized_chunks.len();
+
+                while start < content.len() {
+                    let end = std::cmp::min(start + recommended_size, content.len());
+                    let chunk_content = content[start..end].to_string();
+
+                    let mut new_metadata = chunk.metadata.clone();
+                    new_metadata.id = chunk_id;
+                    new_metadata.frame = chunk_id as u32;
+                    new_metadata.char_offset = start;
+                    new_metadata.length = chunk_content.len();
+
+                    optimized_chunks.push(TextChunk {
+                        content: chunk_content,
+                        metadata: new_metadata,
+                    });
+
+                    start = end;
+                    chunk_id += 1;
+                }
+            }
+        }
+
+        let original_count = self.chunks.len();
+        self.chunks = optimized_chunks;
+        let new_count = self.chunks.len();
+
+        info!("Chunk optimization complete: {} -> {} chunks", original_count, new_count);
+
+        Ok(())
+    }
+
     /// Build QR code video with specific codec
     pub async fn build_video_with_codec(
         &mut self,
@@ -234,6 +295,11 @@ impl MemvidEncoder {
         });
 
         info!("Building video with {} chunks using {:?} codec", self.chunks.len(), codec);
+
+        // Optimize chunks for QR code compatibility
+        info!("Optimizing chunks for QR code compatibility...");
+        self.optimize_chunks_for_qr()?;
+        info!("Optimized to {} chunks", self.chunks.len());
 
         let start_time = std::time::Instant::now();
 
@@ -314,6 +380,34 @@ impl MemvidEncoder {
     /// Check if encoder is empty
     pub fn is_empty(&self) -> bool {
         self.chunks.is_empty()
+    }
+
+    /// Get recommended chunk size for current configuration
+    pub fn get_recommended_chunk_size(&self) -> Result<usize> {
+        self.qr_processor.get_recommended_chunk_size()
+    }
+
+    /// Analyze current chunks and suggest optimizations
+    pub fn analyze_chunks(&self) -> ChunkAnalysis {
+        let total_chunks = self.chunks.len();
+        let total_chars: usize = self.chunks.iter().map(|c| c.content.len()).sum();
+        let avg_chunk_size = if total_chunks > 0 { total_chars / total_chunks } else { 0 };
+        let max_chunk_size = self.chunks.iter().map(|c| c.content.len()).max().unwrap_or(0);
+        let min_chunk_size = self.chunks.iter().map(|c| c.content.len()).min().unwrap_or(0);
+
+        let recommended_size = self.qr_processor.get_recommended_chunk_size().unwrap_or(1000);
+        let oversized_chunks = self.chunks.iter().filter(|c| c.content.len() > recommended_size).count();
+
+        ChunkAnalysis {
+            total_chunks,
+            total_characters: total_chars,
+            avg_chunk_size,
+            max_chunk_size,
+            min_chunk_size,
+            recommended_size,
+            oversized_chunks,
+            needs_optimization: oversized_chunks > 0,
+        }
     }
 
     /// Get chunks reference

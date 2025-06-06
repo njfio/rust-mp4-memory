@@ -127,6 +127,10 @@ path = "examples/folder_demo.rs"
 name = "comprehensive_demo"
 path = "examples/comprehensive_demo.rs"
 
+[[example]]
+name = "qr_size_test"
+path = "examples/qr_size_test.rs"
+
 [profile.release]
 opt-level = 3
 lto = true

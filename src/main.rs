@@ -54,8 +54,8 @@ enum Commands {
         #[arg(short = 'c', long, default_value = "mp4v")]
         codec: String,
 
-        /// Chunk size
-        #[arg(long, default_value = "512")]
+        /// Chunk size (characters per QR code)
+        #[arg(long, default_value = "1000")]
         chunk_size: usize,
 
         /// Chunk overlap
@@ -258,6 +258,11 @@ async fn encode_command(
     config.text.chunk_size = chunk_size;
     config.text.overlap = overlap;
 
+    // Validate chunk size for QR compatibility
+    if chunk_size > 1500 {
+        warn!("Large chunk size ({}) may cause QR code encoding failures. Consider using --chunk-size 1000 or smaller.", chunk_size);
+    }
+
     // Update folder config with command line parameters
     if let Some(depth) = max_depth {
         config.folder.max_depth = Some(depth);
@@ -326,7 +331,25 @@ async fn encode_command(
     let codec = Codec::from_str(&codec)?;
 
     // Build video
-    let stats = encoder.build_video_with_codec(&output, &index, Some(codec)).await?;
+    let stats = match encoder.build_video_with_codec(&output, &index, Some(codec)).await {
+        Ok(stats) => stats,
+        Err(e) => {
+            if e.to_string().contains("data too long") || e.to_string().contains("Data too large for QR code") {
+                error!("QR code encoding failed due to large chunk size!");
+                error!("Current chunk size: {} characters", chunk_size);
+                error!("");
+                error!("💡 Solutions:");
+                error!("   1. Reduce chunk size: --chunk-size 800");
+                error!("   2. Use lower error correction: (modify config)");
+                error!("   3. Process smaller files or use file filtering");
+                error!("");
+                error!("Example: memvid encode --chunk-size 800 --output {} --index {} [your files]", output, index);
+                return Err(e.into());
+            } else {
+                return Err(e.into());
+            }
+        }
+    };
 
     // Print results
     println!("✅ Encoding completed successfully!");

@@ -332,9 +332,9 @@ impl Default for Config {
                 encoding_threads: std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4),
             },
             text: TextConfig {
-                chunk_size: 512,
+                chunk_size: 1000,  // Safe size for QR codes with compression
                 overlap: 50,
-                max_chunk_size: 2048,
+                max_chunk_size: 1500, // Conservative max to ensure QR compatibility
                 min_chunk_size: 100,
             },
             folder: FolderConfig {

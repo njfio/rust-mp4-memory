@@ -27,19 +27,48 @@ impl QrProcessor {
 
     /// Encode text data into a QR code image
     pub fn encode_to_qr(&self, data: &str) -> Result<DynamicImage> {
+        // Calculate QR code capacity based on error correction level
+        let max_capacity = self.get_max_qr_capacity()?;
+
         // Compress data if it's large
         let processed_data = if data.len() > 100 {
             let compressed = self.compress_data(data)?;
-            format!("GZ:{}", compressed)
+            let compressed_with_prefix = format!("GZ:{}", compressed);
+
+            // Check if compressed data still fits
+            if compressed_with_prefix.len() > max_capacity {
+                return Err(MemvidError::qr_code(format!(
+                    "Data too large for QR code: {} bytes (max: {} bytes). Consider reducing chunk size.",
+                    compressed_with_prefix.len(),
+                    max_capacity
+                )));
+            }
+
+            compressed_with_prefix
         } else {
+            if data.len() > max_capacity {
+                return Err(MemvidError::qr_code(format!(
+                    "Data too large for QR code: {} bytes (max: {} bytes). Consider reducing chunk size.",
+                    data.len(),
+                    max_capacity
+                )));
+            }
             data.to_string()
         };
 
-        // Create QR code
-        let qr_code = QrCode::with_error_correction_level(
+        // Create QR code with error handling
+        let qr_code = match QrCode::with_error_correction_level(
             &processed_data,
             self.get_error_correction_level()?,
-        )?;
+        ) {
+            Ok(qr) => qr,
+            Err(e) => {
+                return Err(MemvidError::qr_code(format!(
+                    "Failed to create QR code: {}. Data size: {} bytes. Try reducing chunk size or using lower error correction.",
+                    e, processed_data.len()
+                )));
+            }
+        };
 
         // Use the string renderer which is simple and works
         let qr_string = qr_code.render::<char>()
@@ -187,6 +216,27 @@ impl QrProcessor {
                 self.config.error_correction
             ))),
         }
+    }
+
+    /// Get maximum QR code capacity in bytes for current error correction level
+    fn get_max_qr_capacity(&self) -> Result<usize> {
+        // QR code capacity for alphanumeric data (conservative estimate)
+        // These are approximate values for Version 40 (largest) QR codes
+        match self.config.error_correction.as_str() {
+            "L" => Ok(4296), // Low error correction - highest capacity
+            "M" => Ok(3391), // Medium error correction
+            "Q" => Ok(2420), // Quartile error correction
+            "H" => Ok(1852), // High error correction - lowest capacity
+            _ => Ok(2000),   // Default conservative estimate
+        }
+    }
+
+    /// Get recommended chunk size for QR codes
+    pub fn get_recommended_chunk_size(&self) -> Result<usize> {
+        let max_capacity = self.get_max_qr_capacity()?;
+        // Leave room for compression overhead and metadata
+        // Use 70% of capacity to be safe
+        Ok((max_capacity as f64 * 0.7) as usize)
     }
 
     // OpenCV support removed in simplified version
