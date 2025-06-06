@@ -1,0 +1,109 @@
+[package]
+name = "rust_mem_vid"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+description = "Video-based AI memory library in Rust. Store millions of text chunks in MP4 files with lightning-fast semantic search."
+license = "MIT"
+repository = "https://github.com/yourusername/rust_mem_vid"
+keywords = ["ai", "memory", "video", "search", "embeddings"]
+categories = ["multimedia::video", "text-processing", "science"]
+
+[dependencies]
+# Core dependencies
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# QR Code handling
+qrcode = "0.14"
+image = { version = "0.24", features = ["png", "jpeg"] }
+rqrr = "0.6"
+
+# Video processing (simplified for initial version)
+# ffmpeg-next = "6.0"
+# opencv = { version = "0.88", features = ["opencv-4"] }
+
+# Text processing and embeddings (simplified for initial version)
+# candle-core = "0.3"
+# candle-nn = "0.3"
+# candle-transformers = "0.3"
+# candle-examples = "0.3"
+# tokenizers = "0.15"
+# hf-hub = "0.3"
+
+# Vector similarity search (using simpler alternatives for now)
+# faiss = { version = "0.11", optional = true }
+# hnswlib = "0.1"
+
+# Document parsing (simplified for initial version)
+# pdf-extract = "0.7"
+# epub = "2.0"
+# html2text = "0.6"
+
+# HTTP client for LLM APIs
+reqwest = { version = "0.11", features = ["json"] }
+
+# Async runtime and utilities
+futures = "0.3"
+rayon = "1.7"
+crossbeam = "0.8"
+
+# Configuration and serialization
+toml = "0.8"
+config = "0.13"
+
+# Progress bars and CLI utilities
+indicatif = "0.17"
+console = "0.15"
+
+# Compression
+flate2 = "1.0"
+base64 = "0.21"
+
+# File system utilities
+walkdir = "2.3"
+tempfile = "3.8"
+
+# Logging
+log = "0.4"
+
+[dev-dependencies]
+criterion = "0.5"
+tempfile = "3.8"
+
+[features]
+default = []
+# faiss = ["dep:faiss"]
+# gpu = ["candle-core/cuda"]
+
+[[bin]]
+name = "memvid"
+path = "src/main.rs"
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[[example]]
+name = "pdf_chat"
+path = "examples/pdf_chat.rs"
+
+[[example]]
+name = "demo"
+path = "examples/demo.rs"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
