@@ -2,10 +2,12 @@
 
 use image::DynamicImage;
 use std::path::Path;
-use tracing::{info, warn, error};
+use tracing::{info, warn, error, debug};
 
 use crate::config::Config;
+use crate::data::{DataProcessor, DataFileType};
 use crate::error::{MemvidError, Result};
+use crate::folder::{FolderProcessor, FolderStats};
 use crate::index::IndexManager;
 use crate::qr::{QrProcessor, BatchQrProcessor};
 use crate::text::{TextProcessor, TextChunk};
@@ -15,6 +17,8 @@ use crate::video::{VideoEncoder, Codec, VideoStats};
 pub struct MemvidEncoder {
     config: Config,
     text_processor: TextProcessor,
+    data_processor: DataProcessor,
+    folder_processor: FolderProcessor,
     qr_processor: QrProcessor,
     batch_qr_processor: BatchQrProcessor,
     video_encoder: VideoEncoder,
@@ -32,8 +36,10 @@ impl MemvidEncoder {
         let index_manager = IndexManager::new(config.clone()).await?;
 
         Ok(Self {
-            config,
+            config: config.clone(),
             text_processor,
+            data_processor: DataProcessor::new(config.clone()),
+            folder_processor: FolderProcessor::new(config.folder.clone())?,
             qr_processor,
             batch_qr_processor,
             video_encoder,
@@ -143,23 +149,68 @@ impl MemvidEncoder {
         Ok(())
     }
 
-    /// Add all files from a directory
-    pub async fn add_directory(&mut self, dir_path: &str) -> Result<()> {
-        if !Path::new(dir_path).exists() {
-            return Err(MemvidError::file_not_found(dir_path));
+
+
+    /// Add data file (CSV, Parquet, JSON, code files, etc.)
+    pub async fn add_data_file(&mut self, file_path: &str) -> Result<()> {
+        if !Path::new(file_path).exists() {
+            return Err(MemvidError::file_not_found(file_path));
         }
 
-        let mut new_chunks = self.text_processor.process_directory(dir_path).await?;
-        
+        let data_chunks = self.data_processor.process_file(file_path).await?;
+        let mut text_chunks = self.data_processor.to_text_chunks(data_chunks);
+
         // Update frame numbers to be sequential
-        for chunk in &mut new_chunks {
+        for chunk in &mut text_chunks {
             chunk.metadata.frame = self.chunks.len() as u32;
             chunk.metadata.id = self.chunks.len();
             self.chunks.push(chunk.clone());
         }
 
-        info!("Added directory {} with {} chunks. Total: {}", dir_path, new_chunks.len(), self.chunks.len());
+        info!("Added data file {} with {} chunks. Total: {}", file_path, text_chunks.len(), self.chunks.len());
         Ok(())
+    }
+
+    /// Add CSV file with specific chunking strategy
+    pub async fn add_csv_file(&mut self, file_path: &str) -> Result<()> {
+        self.add_data_file(file_path).await
+    }
+
+    /// Add Parquet file
+    pub async fn add_parquet_file(&mut self, file_path: &str) -> Result<()> {
+        self.add_data_file(file_path).await
+    }
+
+    /// Add code file (Rust, JavaScript, Python, etc.)
+    pub async fn add_code_file(&mut self, file_path: &str) -> Result<()> {
+        self.add_data_file(file_path).await
+    }
+
+    /// Add log file
+    pub async fn add_log_file(&mut self, file_path: &str) -> Result<()> {
+        self.add_data_file(file_path).await
+    }
+
+    /// Add any supported file type automatically
+    pub async fn add_file(&mut self, file_path: &str) -> Result<()> {
+        let path = Path::new(file_path);
+        let extension = path.extension()
+            .and_then(|ext| ext.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        // Try data processor first for supported formats
+        if DataFileType::from_extension(&extension).is_some() {
+            self.add_data_file(file_path).await
+        } else {
+            // Fall back to text processor
+            match extension.as_str() {
+                "pdf" => self.add_pdf(file_path).await,
+                "epub" => self.add_epub(file_path).await,
+                "txt" | "md" | "rst" => self.add_text_file(file_path).await,
+                _ => Err(MemvidError::unsupported_format(&extension)),
+            }
+        }
     }
 
     /// Build QR code video from chunks
@@ -269,6 +320,99 @@ impl MemvidEncoder {
     pub fn chunks(&self) -> &[TextChunk] {
         &self.chunks
     }
+
+    /// Add all supported files from a directory recursively
+    pub async fn add_directory(&mut self, dir_path: &str) -> Result<FolderStats> {
+        self.add_directory_with_config(dir_path, None).await
+    }
+
+    /// Add directory with custom folder configuration
+    pub async fn add_directory_with_config(&mut self, dir_path: &str, folder_config: Option<crate::config::FolderConfig>) -> Result<FolderStats> {
+        let start_time = std::time::Instant::now();
+
+        // Use custom config if provided, otherwise use encoder's config
+        let processor = if let Some(config) = folder_config {
+            FolderProcessor::new(config)?
+        } else {
+            FolderProcessor::new(self.config.folder.clone())?
+        };
+
+        // Discover files
+        let files = processor.discover_files(dir_path)?;
+
+        let mut stats = FolderStats {
+            directories_scanned: 1,
+            files_found: files.len(),
+            ..Default::default()
+        };
+
+        info!("Found {} files in directory: {}", files.len(), dir_path);
+
+        // Process each file
+        for file_info in files {
+            let file_path = file_info.path.to_string_lossy();
+
+            match self.add_file(&file_path).await {
+                Ok(_) => {
+                    stats.files_processed += 1;
+                    stats.bytes_processed += file_info.size;
+                    debug!("Processed file: {}", file_path);
+                }
+                Err(e) => {
+                    stats.files_failed += 1;
+                    warn!("Failed to process file {}: {}", file_path, e);
+                }
+            }
+        }
+
+        stats.processing_time_ms = start_time.elapsed().as_millis() as u64;
+
+        info!("Directory processing complete: {} processed, {} failed, {} skipped",
+              stats.files_processed, stats.files_failed, stats.files_skipped);
+
+        Ok(stats)
+    }
+
+    /// Add multiple directories
+    pub async fn add_directories(&mut self, dir_paths: &[&str]) -> Result<Vec<FolderStats>> {
+        let mut all_stats = Vec::new();
+
+        for dir_path in dir_paths {
+            match self.add_directory(dir_path).await {
+                Ok(stats) => all_stats.push(stats),
+                Err(e) => {
+                    error!("Failed to process directory {}: {}", dir_path, e);
+                    // Continue with other directories
+                }
+            }
+        }
+
+        Ok(all_stats)
+    }
+
+    /// Preview files that would be processed in a directory (without actually processing)
+    pub fn preview_directory(&self, dir_path: &str) -> Result<Vec<crate::folder::FileInfo>> {
+        let processor = FolderProcessor::new(self.config.folder.clone())?;
+        processor.discover_files(dir_path)
+    }
+
+    /// Preview files with custom configuration
+    pub fn preview_directory_with_config(&self, dir_path: &str, folder_config: crate::config::FolderConfig) -> Result<Vec<crate::folder::FileInfo>> {
+        let processor = FolderProcessor::new(folder_config)?;
+        processor.discover_files(dir_path)
+    }
+
+    /// Get folder processing configuration
+    pub fn folder_config(&self) -> &crate::config::FolderConfig {
+        &self.config.folder
+    }
+
+    /// Update folder processing configuration
+    pub fn set_folder_config(&mut self, config: crate::config::FolderConfig) -> Result<()> {
+        self.folder_processor = FolderProcessor::new(config.clone())?;
+        self.config.folder = config;
+        Ok(())
+    }
 }
 
 /// Data structure for QR code content
@@ -325,6 +469,8 @@ mod tests {
         let mut encoder = MemvidEncoder {
             config: config.clone(),
             text_processor: TextProcessor::new(config.text.clone()),
+            data_processor: DataProcessor::new(config.clone()),
+            folder_processor: FolderProcessor::new(config.folder.clone()).unwrap(),
             qr_processor: QrProcessor::new(config.qr.clone()),
             batch_qr_processor: BatchQrProcessor::new(config.qr.clone()),
             video_encoder: VideoEncoder::new(config.clone()),
@@ -348,6 +494,8 @@ mod tests {
         let encoder = MemvidEncoder {
             config: config.clone(),
             text_processor: TextProcessor::new(config.text.clone()),
+            data_processor: DataProcessor::new(config.clone()),
+            folder_processor: FolderProcessor::new(config.folder.clone()).unwrap(),
             qr_processor: QrProcessor::new(config.qr.clone()),
             batch_qr_processor: BatchQrProcessor::new(config.qr.clone()),
             video_encoder: VideoEncoder::new(config.clone()),

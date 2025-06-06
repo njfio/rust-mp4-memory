@@ -61,6 +61,30 @@ enum Commands {
         /// Chunk overlap
         #[arg(long, default_value = "50")]
         overlap: usize,
+
+        /// Maximum recursion depth for directories (default: 10)
+        #[arg(long)]
+        max_depth: Option<usize>,
+
+        /// Include only these file extensions (comma-separated, e.g., "rs,py,js")
+        #[arg(long)]
+        include_extensions: Option<String>,
+
+        /// Exclude these file extensions (comma-separated, e.g., "exe,dll,bin")
+        #[arg(long)]
+        exclude_extensions: Option<String>,
+
+        /// Follow symbolic links
+        #[arg(long)]
+        follow_symlinks: bool,
+
+        /// Include hidden files and directories
+        #[arg(long)]
+        include_hidden: bool,
+
+        /// Maximum file size to process in MB (default: 100)
+        #[arg(long)]
+        max_file_size: Option<usize>,
     },
 
     /// Search a QR code video
@@ -162,8 +186,18 @@ async fn main() -> anyhow::Result<()> {
             codec,
             chunk_size,
             overlap,
+            max_depth,
+            include_extensions,
+            exclude_extensions,
+            follow_symlinks,
+            include_hidden,
+            max_file_size,
         } => {
-            encode_command(output, index, files, dirs, text, codec, chunk_size, overlap, config).await?;
+            encode_command(
+                output, index, files, dirs, text, codec, chunk_size, overlap,
+                max_depth, include_extensions, exclude_extensions, follow_symlinks,
+                include_hidden, max_file_size, config
+            ).await?;
         }
 
         Commands::Search {
@@ -210,6 +244,12 @@ async fn encode_command(
     codec: String,
     chunk_size: usize,
     overlap: usize,
+    max_depth: Option<usize>,
+    include_extensions: Option<String>,
+    exclude_extensions: Option<String>,
+    follow_symlinks: bool,
+    include_hidden: bool,
+    max_file_size: Option<usize>,
     mut config: Config,
 ) -> anyhow::Result<()> {
     info!("Starting encoding process...");
@@ -217,6 +257,28 @@ async fn encode_command(
     // Update config with command line parameters
     config.text.chunk_size = chunk_size;
     config.text.overlap = overlap;
+
+    // Update folder config with command line parameters
+    if let Some(depth) = max_depth {
+        config.folder.max_depth = Some(depth);
+    }
+
+    if let Some(extensions) = include_extensions {
+        let exts: Vec<String> = extensions.split(',').map(|s| s.trim().to_string()).collect();
+        config.folder.include_extensions = Some(exts);
+    }
+
+    if let Some(extensions) = exclude_extensions {
+        let mut exts: Vec<String> = extensions.split(',').map(|s| s.trim().to_string()).collect();
+        config.folder.exclude_extensions.append(&mut exts);
+    }
+
+    config.folder.follow_symlinks = follow_symlinks;
+    config.folder.include_hidden = include_hidden;
+
+    if let Some(size_mb) = max_file_size {
+        config.folder.max_file_size = size_mb * 1024 * 1024; // Convert MB to bytes
+    }
 
     let mut encoder = MemvidEncoder::new_with_config(config).await?;
 
@@ -228,20 +290,31 @@ async fn encode_command(
     // Add files
     for file in files {
         let file_str = file.to_string_lossy();
-        match file.extension().and_then(|ext| ext.to_str()) {
-            Some("pdf") => encoder.add_pdf(&file_str).await?,
-            Some("epub") => encoder.add_epub(&file_str).await?,
-            Some("txt") | Some("md") | Some("rst") => encoder.add_text_file(&file_str).await?,
-            _ => {
-                error!("Unsupported file type: {}", file_str);
+        match encoder.add_file(&file_str).await {
+            Ok(_) => {
+                info!("Successfully added file: {}", file_str);
+            }
+            Err(e) => {
+                error!("Failed to add file {}: {}", file_str, e);
                 continue;
             }
         }
     }
 
     // Add directories
+    let mut total_folder_stats = Vec::new();
     for dir in dirs {
-        encoder.add_directory(&dir.to_string_lossy()).await?;
+        info!("Processing directory: {}", dir.display());
+        match encoder.add_directory(&dir.to_string_lossy()).await {
+            Ok(stats) => {
+                info!("Directory {} processed: {} files processed, {} failed",
+                      dir.display(), stats.files_processed, stats.files_failed);
+                total_folder_stats.push(stats);
+            }
+            Err(e) => {
+                error!("Failed to process directory {}: {}", dir.display(), e);
+            }
+        }
     }
 
     if encoder.is_empty() {
@@ -266,6 +339,27 @@ async fn encode_command(
     println!("   • Codec: {}", stats.video_stats.codec);
     println!("   • Encoding time: {}", format_duration(stats.encoding_time_seconds));
     println!("   • Index file: {}", index);
+
+    // Print folder processing statistics if any directories were processed
+    if !total_folder_stats.is_empty() {
+        println!("\n📁 Folder Processing Statistics:");
+        let total_files_found: usize = total_folder_stats.iter().map(|s| s.files_found).sum();
+        let total_files_processed: usize = total_folder_stats.iter().map(|s| s.files_processed).sum();
+        let total_files_failed: usize = total_folder_stats.iter().map(|s| s.files_failed).sum();
+        let total_bytes_processed: u64 = total_folder_stats.iter().map(|s| s.bytes_processed).sum();
+        let total_processing_time: u64 = total_folder_stats.iter().map(|s| s.processing_time_ms).sum();
+
+        println!("   • Directories scanned: {}", total_folder_stats.len());
+        println!("   • Files found: {}", total_files_found);
+        println!("   • Files processed: {}", total_files_processed);
+        println!("   • Files failed: {}", total_files_failed);
+        println!("   • Data processed: {}", format_file_size(total_bytes_processed));
+        println!("   • Processing time: {}ms", total_processing_time);
+
+        if total_files_failed > 0 {
+            println!("   ⚠️  {} files failed to process", total_files_failed);
+        }
+    }
 
     Ok(())
 }

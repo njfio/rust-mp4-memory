@@ -10,7 +10,9 @@ A complete Rust implementation of the MemVid library - a revolutionary video-bas
 - **🎥 Video-as-Database**: Store millions of text chunks in MP4 files
 - **🔍 Semantic Search**: Find relevant content using natural language queries with embeddings
 - **💬 Built-in Chat**: Conversational interface with LLM integration (OpenAI, Anthropic)
-- **📚 Document Support**: Direct import of PDF, EPUB, and text files
+- **📚 Document Support**: Direct import of PDF, EPUB, text files, CSV, Parquet, JSON, and code files
+- **🔧 Data Processing**: Advanced chunking strategies for structured data and source code
+- **💻 Code Analysis**: Intelligent parsing of Rust, Python, JavaScript, TypeScript, and more
 - **🚀 Fast Retrieval**: Sub-second search across massive datasets
 - **💾 Efficient Storage**: Advanced video compression with multiple codec support
 - **🔧 Multiple Codecs**: H.264, H.265, AV1, VP9 support via FFmpeg
@@ -71,8 +73,26 @@ async fn main() -> anyhow::Result<()> {
 ### CLI Usage
 
 ```bash
-# Encode documents into a video
-memvid encode --output memory.mp4 --index memory.json --files document.pdf book.epub
+# Encode documents into a video (auto-detects file types)
+memvid encode --output memory.mp4 --index memory.json --files document.pdf data.csv code.rs logs.txt
+
+# Encode with directories (processes all supported files recursively)
+memvid encode --output library.mp4 --index library.json --dirs ./documents ./code
+
+# Advanced folder processing with custom options
+memvid encode --output codebase.mp4 --index codebase.json \
+  --dirs ./src ./tests \
+  --max-depth 5 \
+  --include-extensions "rs,py,js,ts" \
+  --exclude-extensions "exe,dll,bin" \
+  --max-file-size 10 \
+  --follow-symlinks \
+  --include-hidden
+
+# Process only specific file types from a directory
+memvid encode --output data.mp4 --index data.json \
+  --dirs ./data \
+  --include-extensions "csv,json,parquet"
 
 # Search the video
 memvid search --video memory.mp4 --index memory.json --query "machine learning" --top-k 5
@@ -149,6 +169,109 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
+### Data Processing
+
+```rust
+use rust_mem_vid::{MemvidEncoder, DataProcessor, DataFileType};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    rust_mem_vid::init().await?;
+
+    let mut encoder = MemvidEncoder::new().await?;
+
+    // Process different data types
+    encoder.add_csv_file("sales_data.csv").await?;
+    encoder.add_parquet_file("analytics.parquet").await?;
+    encoder.add_code_file("main.rs").await?;
+    encoder.add_code_file("script.py").await?;
+    encoder.add_log_file("application.log").await?;
+
+    // Auto-detect file types
+    encoder.add_file("data.json").await?;
+    encoder.add_file("config.yaml").await?;
+
+    // Build video with all data
+    let stats = encoder.build_video("data_memory.mp4", "data_index.json").await?;
+
+    println!("Processed {} chunks from various data sources", stats.total_chunks);
+
+    Ok(())
+}
+```
+
+### Folder Processing
+
+Rust MemVid provides powerful recursive folder processing with extensive configuration options:
+
+```rust
+use rust_mem_vid::{MemvidEncoder, Config};
+use rust_mem_vid::config::FolderConfig;
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    rust_mem_vid::init().await?;
+
+    // Custom folder configuration
+    let folder_config = FolderConfig {
+        max_depth: Some(5),                    // Limit recursion depth
+        include_extensions: Some(vec![         // Only process these file types
+            "rs".to_string(),
+            "py".to_string(),
+            "js".to_string()
+        ]),
+        exclude_extensions: vec![              // Skip these file types
+            "exe".to_string(),
+            "dll".to_string()
+        ],
+        exclude_patterns: vec![                // Skip paths matching these patterns
+            "*/target/*".to_string(),          // Rust build artifacts
+            "*/node_modules/*".to_string(),    // Node.js dependencies
+            "*/.git/*".to_string(),            // Git repository
+        ],
+        min_file_size: 10,                     // Skip files smaller than 10 bytes
+        max_file_size: 50 * 1024 * 1024,      // Skip files larger than 50MB
+        follow_symlinks: false,                // Don't follow symbolic links
+        include_hidden: false,                 // Skip hidden files
+        skip_binary: true,                     // Skip binary files
+    };
+
+    let mut config = Config::default();
+    config.folder = folder_config;
+
+    let mut encoder = MemvidEncoder::new_with_config(config).await?;
+
+    // Process directories with custom configuration
+    let stats = encoder.add_directory("./src").await?;
+
+    println!("Processed {} files, {} failed", stats.files_processed, stats.files_failed);
+
+    // Preview files before processing
+    let files = encoder.preview_directory("./data")?;
+    println!("Would process {} files", files.len());
+
+    // Process multiple directories
+    let all_stats = encoder.add_directories(&["./src", "./tests", "./examples"]).await?;
+
+    encoder.build_video("codebase.mp4", "codebase.json").await?;
+
+    Ok(())
+}
+```
+
+#### Folder Processing Features
+
+- **🔍 Smart File Discovery**: Automatically finds all supported file types
+- **📏 Depth Control**: Configurable recursion depth limiting
+- **🎯 File Type Filtering**: Include/exclude specific file extensions
+- **📋 Pattern Matching**: Glob pattern support for path exclusion
+- **📊 Size Filtering**: Min/max file size limits
+- **🔗 Symlink Handling**: Configurable symbolic link following
+- **👁️ Hidden File Support**: Optional processing of hidden files
+- **🔍 Binary Detection**: Automatic binary file detection and skipping
+- **📈 Progress Tracking**: Detailed statistics and progress reporting
+- **👀 Preview Mode**: Preview files before processing
+
 ## 🔧 Configuration
 
 Create a `memvid.toml` configuration file:
@@ -206,6 +329,10 @@ model = "claude-3-sonnet-20240229"
 - **💼 Corporate Knowledge**: Build company-wide searchable knowledge bases
 - **🔬 Scientific Literature**: Quick semantic search across research papers
 - **📝 Personal Notes**: Transform your notes into a searchable AI assistant
+- **📊 Data Analytics**: Store and search through CSV, Parquet, and JSON datasets
+- **💻 Code Documentation**: Index entire codebases with intelligent chunking
+- **📋 Log Analysis**: Process and search through application logs efficiently
+- **🏢 Business Intelligence**: Create searchable repositories of structured data
 
 ## 🏗️ Architecture
 
@@ -216,6 +343,8 @@ The library consists of several key components:
 - **Embedding Model**: Generates semantic embeddings using transformer models
 - **Index Manager**: Manages vector search and metadata storage
 - **Text Processor**: Handles document parsing and text chunking
+- **Data Processor**: Advanced processing for CSV, Parquet, JSON, and code files
+- **Code Analyzer**: Intelligent parsing and chunking of source code
 - **Chat Interface**: Integrates with LLM APIs for conversational search
 
 ## 🔧 Dependencies
@@ -253,6 +382,8 @@ The library uses several high-quality Rust crates:
 - **QR Codes**: `qrcode`, `rqrr`, `image`
 - **Search**: `faiss` (optional), `hnswlib`
 - **Documents**: `pdf-extract`, `epub`
+- **Data Processing**: `polars`, `arrow`, `parquet`, `csv`
+- **Code Analysis**: `tree-sitter`, `syntect`
 - **Async**: `tokio`, `futures`, `rayon`
 
 ## 🚀 Performance
@@ -286,6 +417,8 @@ cargo test --features faiss
 # Run examples
 cargo run --example basic_usage
 cargo run --example pdf_chat document.pdf
+cargo run --example data_demo
+cargo run --example folder_demo
 ```
 
 ## 🤝 Contributing

@@ -157,6 +157,11 @@ impl MemvidError {
         Self::Epub(message.into())
     }
 
+    /// Create a new data processing error
+    pub fn data_processing<S: Into<String>>(message: S) -> Self {
+        Self::Generic { message: message.into() }
+    }
+
     /// Create a new index error
     pub fn index<S: Into<String>>(message: S) -> Self {
         Self::Index(message.into())

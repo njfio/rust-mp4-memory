@@ -44,7 +44,9 @@
 //! ```
 
 pub mod config;
+pub mod data;
 pub mod encoder;
+pub mod folder;
 pub mod retriever;
 pub mod chat;
 pub mod qr;
@@ -63,7 +65,9 @@ pub use config::Config;
 pub use error::{MemvidError, Result};
 
 // Re-export commonly used types
+pub use data::{DataProcessor, DataFileType, DataChunk, ChunkingStrategy};
 pub use embeddings::EmbeddingModel;
+pub use folder::{FolderProcessor, FileInfo, FolderStats, SkipReason};
 pub use index::IndexManager;
 pub use text::{TextProcessor, ChunkMetadata};
 pub use video::{VideoEncoder, VideoDecoder, Codec};

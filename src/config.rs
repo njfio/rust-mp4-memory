@@ -20,7 +20,10 @@ pub struct Config {
     
     /// Text processing configuration
     pub text: TextConfig,
-    
+
+    /// Folder processing configuration
+    pub folder: FolderConfig,
+
     /// Embedding model configuration
     pub embeddings: EmbeddingConfig,
     
@@ -92,6 +95,29 @@ pub struct TextConfig {
     
     /// Minimum chunk size
     pub min_chunk_size: usize,
+}
+
+/// Folder processing configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FolderConfig {
+    /// Maximum recursion depth (0 = current directory only, None = unlimited)
+    pub max_depth: Option<usize>,
+    /// File extensions to include (None = all supported types)
+    pub include_extensions: Option<Vec<String>>,
+    /// File extensions to exclude
+    pub exclude_extensions: Vec<String>,
+    /// Patterns to exclude (glob patterns)
+    pub exclude_patterns: Vec<String>,
+    /// Minimum file size in bytes
+    pub min_file_size: usize,
+    /// Maximum file size in bytes (100MB default)
+    pub max_file_size: usize,
+    /// Follow symbolic links
+    pub follow_symlinks: bool,
+    /// Include hidden files and directories
+    pub include_hidden: bool,
+    /// Skip binary files
+    pub skip_binary: bool,
 }
 
 /// Embedding model configuration
@@ -310,6 +336,35 @@ impl Default for Config {
                 overlap: 50,
                 max_chunk_size: 2048,
                 min_chunk_size: 100,
+            },
+            folder: FolderConfig {
+                max_depth: Some(10), // Reasonable default depth
+                include_extensions: None, // Include all supported types
+                exclude_extensions: vec![
+                    "exe".to_string(), "dll".to_string(), "so".to_string(), "dylib".to_string(),
+                    "bin".to_string(), "obj".to_string(), "o".to_string(), "a".to_string(),
+                    "lib".to_string(), "zip".to_string(), "tar".to_string(), "gz".to_string(),
+                    "rar".to_string(), "7z".to_string(), "iso".to_string(), "img".to_string(),
+                    "dmg".to_string(), "pkg".to_string(), "deb".to_string(), "rpm".to_string(),
+                ],
+                exclude_patterns: vec![
+                    "*/target/*".to_string(), // Rust build artifacts
+                    "*/node_modules/*".to_string(), // Node.js dependencies
+                    "*/.git/*".to_string(), // Git repository
+                    "*/.svn/*".to_string(), // SVN repository
+                    "*/.hg/*".to_string(), // Mercurial repository
+                    "*/build/*".to_string(), // Build directories
+                    "*/dist/*".to_string(), // Distribution directories
+                    "*/__pycache__/*".to_string(), // Python cache
+                    "*.tmp".to_string(), // Temporary files
+                    "*.temp".to_string(), // Temporary files
+                    "*.cache".to_string(), // Cache files
+                ],
+                min_file_size: 1, // At least 1 byte
+                max_file_size: 100 * 1024 * 1024, // 100MB max
+                follow_symlinks: false, // Don't follow symlinks by default
+                include_hidden: false, // Skip hidden files by default
+                skip_binary: true, // Skip binary files by default
             },
             embeddings: EmbeddingConfig {
                 model_name: "sentence-transformers/all-MiniLM-L6-v2".to_string(),
