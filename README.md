@@ -1,6 +1,6 @@
 # Rust MemVid 🦀📹
 
-A complete Rust implementation of the MemVid library - a revolutionary video-based AI memory system that stores text chunks as QR codes in video files with lightning-fast semantic search.
+A complete Rust implementation of the [MemVid](https://github.com/Olow304/memvid) library - a revolutionary video-based AI memory system that stores text chunks as QR codes in video files with lightning-fast semantic search.
 
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
