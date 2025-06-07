@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use serde::{Serialize, Deserialize};
-use tracing::{info, debug, warn};
+use tracing::info;
 
 use crate::config::Config;
 use crate::error::{MemvidError, Result};
@@ -256,10 +256,31 @@ impl KnowledgeGraphBuilder {
 
     /// Load chunks from a retriever
     async fn load_chunks_from_retriever(&self, retriever: &MemvidRetriever) -> Result<Vec<TextChunk>> {
-        // This would need to be implemented in the retriever
-        // For now, return empty vector
-        warn!("load_chunks_from_retriever not yet implemented");
-        Ok(Vec::new())
+        info!("Loading chunks from retriever for knowledge graph analysis");
+
+        // Get all chunks by searching with a broad query
+        let search_results = retriever.search_with_metadata("", 10000).await?;
+
+        let mut chunks = Vec::new();
+        for result in search_results {
+            let text_len = result.text.len();
+            let chunk = TextChunk {
+                content: result.text,
+                metadata: crate::text::ChunkMetadata {
+                    id: result.chunk_id,
+                    source: result.metadata.source,
+                    page: result.metadata.page,
+                    char_offset: 0, // Not available from search results
+                    length: text_len,
+                    frame: result.frame_number,
+                    extra: std::collections::HashMap::new(),
+                },
+            };
+            chunks.push(chunk);
+        }
+
+        info!("Loaded {} chunks from retriever", chunks.len());
+        Ok(chunks)
     }
 
     /// Extract concepts from all chunks
@@ -360,12 +381,125 @@ impl KnowledgeGraphBuilder {
         Ok(relationships)
     }
 
-    /// Detect communities of related concepts
+    /// Detect communities of related concepts using a simplified clustering algorithm
     async fn detect_communities(&self, concepts: &[ConceptNode], relationships: &[ConceptRelationship]) -> Result<Vec<ConceptCommunity>> {
-        // Implement community detection algorithm (e.g., Louvain algorithm)
-        // For now, return empty vector
-        warn!("Community detection not yet implemented");
-        Ok(Vec::new())
+        info!("Detecting concept communities using graph clustering");
+
+        if concepts.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Build adjacency list from relationships
+        let mut adjacency: HashMap<String, Vec<String>> = HashMap::new();
+        for concept in concepts {
+            adjacency.insert(concept.id.clone(), Vec::new());
+        }
+
+        for relationship in relationships {
+            if relationship.strength > 0.5 { // Only consider strong relationships
+                adjacency.entry(relationship.source_concept.clone())
+                    .or_default()
+                    .push(relationship.target_concept.clone());
+                adjacency.entry(relationship.target_concept.clone())
+                    .or_default()
+                    .push(relationship.source_concept.clone());
+            }
+        }
+
+        // Simple connected components algorithm for community detection
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut communities = Vec::new();
+        let mut community_id = 0;
+
+        for concept in concepts {
+            if !visited.contains(&concept.id) {
+                let mut community_concepts = Vec::new();
+                let mut stack = vec![concept.id.clone()];
+
+                // DFS to find connected component
+                while let Some(current_id) = stack.pop() {
+                    if visited.contains(&current_id) {
+                        continue;
+                    }
+
+                    visited.insert(current_id.clone());
+                    community_concepts.push(current_id.clone());
+
+                    if let Some(neighbors) = adjacency.get(&current_id) {
+                        for neighbor in neighbors {
+                            if !visited.contains(neighbor) {
+                                stack.push(neighbor.clone());
+                            }
+                        }
+                    }
+                }
+
+                // Only create communities with multiple concepts
+                if community_concepts.len() > 1 {
+                    // Find central concepts (those with most connections within community)
+                    let mut concept_connections: HashMap<String, usize> = HashMap::new();
+                    for concept_id in &community_concepts {
+                        let connections = adjacency.get(concept_id)
+                            .map(|neighbors| neighbors.iter()
+                                .filter(|n| community_concepts.contains(n))
+                                .count())
+                            .unwrap_or(0);
+                        concept_connections.insert(concept_id.clone(), connections);
+                    }
+
+                    let mut central_concepts: Vec<String> = concept_connections.iter()
+                        .filter(|(_, &count)| count > 0)
+                        .map(|(id, _)| id.clone())
+                        .collect();
+                    central_concepts.sort_by(|a, b| {
+                        concept_connections.get(b).unwrap_or(&0)
+                            .cmp(concept_connections.get(a).unwrap_or(&0))
+                    });
+                    central_concepts.truncate(3); // Top 3 central concepts
+
+                    // Calculate cohesion score
+                    let total_possible_connections = community_concepts.len() * (community_concepts.len() - 1) / 2;
+                    let actual_connections = relationships.iter()
+                        .filter(|r| community_concepts.contains(&r.source_concept) &&
+                                   community_concepts.contains(&r.target_concept))
+                        .count();
+                    let cohesion_score = if total_possible_connections > 0 {
+                        actual_connections as f64 / total_possible_connections as f64
+                    } else {
+                        0.0
+                    };
+
+                    // Generate community name from central concepts
+                    let community_name = if central_concepts.is_empty() {
+                        format!("Community {}", community_id)
+                    } else {
+                        let concept_names: Vec<String> = central_concepts.iter()
+                            .filter_map(|id| concepts.iter().find(|c| &c.id == id))
+                            .map(|c| c.name.clone())
+                            .collect();
+                        if concept_names.is_empty() {
+                            format!("Community {}", community_id)
+                        } else {
+                            concept_names.join(" & ")
+                        }
+                    };
+
+                    communities.push(ConceptCommunity {
+                        id: format!("community_{}", community_id),
+                        name: community_name,
+                        concepts: community_concepts,
+                        central_concepts,
+                        cohesion_score,
+                        topic_summary: None, // Could be enhanced with topic modeling
+                    });
+
+                    community_id += 1;
+                }
+            }
+        }
+
+        info!("Detected {} concept communities", communities.len());
+        Ok(communities)
     }
 
     /// Normalize concept names for deduplication

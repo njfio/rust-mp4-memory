@@ -440,3 +440,294 @@ impl SynthesisStrategy for TemplateSynthesisStrategy {
         0.6
     }
 }
+
+/// AI-powered synthesis strategy using LLM APIs
+pub struct AiSynthesisStrategy {
+    api_key: Option<String>,
+    model: String,
+    base_url: String,
+    max_tokens: usize,
+    temperature: f64,
+}
+
+impl AiSynthesisStrategy {
+    pub fn new() -> Self {
+        Self {
+            api_key: std::env::var("OPENAI_API_KEY").ok()
+                .or_else(|| std::env::var("ANTHROPIC_API_KEY").ok())
+                .or_else(|| std::env::var("OLLAMA_API_KEY").ok()),
+            model: std::env::var("AI_MODEL").unwrap_or_else(|_| "gpt-3.5-turbo".to_string()),
+            base_url: std::env::var("AI_BASE_URL").unwrap_or_else(|_| "https://api.openai.com/v1".to_string()),
+            max_tokens: 2000,
+            temperature: 0.7,
+        }
+    }
+
+    pub fn with_config(api_key: String, model: String, base_url: String) -> Self {
+        Self {
+            api_key: Some(api_key),
+            model,
+            base_url,
+            max_tokens: 2000,
+            temperature: 0.7,
+        }
+    }
+
+    /// Generate AI-powered synthesis using LLM API
+    async fn generate_ai_synthesis(&self, context: &SynthesisContext) -> Result<String> {
+        if self.api_key.is_none() {
+            return Err(MemvidError::invalid_input("No AI API key configured"));
+        }
+
+        let prompt = self.build_synthesis_prompt(context);
+
+        // Try different API endpoints based on base URL
+        if self.base_url.contains("openai.com") {
+            self.call_openai_api(&prompt).await
+        } else if self.base_url.contains("anthropic.com") {
+            self.call_anthropic_api(&prompt).await
+        } else {
+            // Assume Ollama or OpenAI-compatible API
+            self.call_openai_compatible_api(&prompt).await
+        }
+    }
+
+    fn build_synthesis_prompt(&self, context: &SynthesisContext) -> String {
+        let synthesis_instruction = match context.synthesis_type {
+            SynthesisType::Summary => "Generate a comprehensive summary that captures the key themes, main points, and important details.",
+            SynthesisType::Insights => "Extract deep insights, patterns, and non-obvious connections. Focus on what the data reveals beyond surface-level information.",
+            SynthesisType::Contradictions => "Identify contradictions, conflicts, or inconsistencies in the information. Highlight areas where sources disagree.",
+            SynthesisType::KnowledgeGaps => "Identify gaps in knowledge, missing information, or areas that need further investigation.",
+            SynthesisType::Trends => "Analyze trends, patterns over time, and evolutionary changes in the content.",
+            SynthesisType::Recommendations => "Generate specific, actionable recommendations based on the analysis.",
+            SynthesisType::Connections => "Find unexpected connections, relationships, and interdependencies between concepts.",
+            SynthesisType::Evolution => "Analyze how concepts, ideas, or topics have evolved or changed over time.",
+        };
+
+        let relevant_content = context.relevant_chunks.iter()
+            .take(10) // Limit to avoid token limits
+            .map(|chunk| format!("- {}", chunk.content.chars().take(500).collect::<String>()))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let concepts = context.relevant_concepts.iter()
+            .take(20)
+            .map(|c| c.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        format!(
+            r#"You are an expert knowledge analyst. Your task is to {instruction}
+
+Query: "{query}"
+
+Key Concepts Identified: {concepts}
+
+Relevant Content:
+{content}
+
+Instructions:
+1. {instruction}
+2. Be specific and evidence-based
+3. Cite relevant information from the content
+4. Provide confidence levels for your conclusions
+5. Structure your response clearly with key points
+6. Aim for depth and insight, not just summarization
+
+Generate a comprehensive analysis:"#,
+            instruction = synthesis_instruction,
+            query = context.query,
+            concepts = concepts,
+            content = relevant_content
+        )
+    }
+
+    async fn call_openai_api(&self, prompt: &str) -> Result<String> {
+        let client = reqwest::Client::new();
+
+        let request_body = serde_json::json!({
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature
+        });
+
+        let response = client
+            .post(&format!("{}/chat/completions", self.base_url))
+            .header("Authorization", format!("Bearer {}", self.api_key.as_ref().unwrap()))
+            .header("Content-Type", "application/json")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| MemvidError::synthesis(format!("OpenAI API request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MemvidError::synthesis(format!("OpenAI API error: {}", error_text)));
+        }
+
+        let response_json: serde_json::Value = response.json().await
+            .map_err(|e| MemvidError::synthesis(format!("Failed to parse OpenAI response: {}", e)))?;
+
+        let content = response_json["choices"][0]["message"]["content"]
+            .as_str()
+            .ok_or_else(|| MemvidError::synthesis("Invalid OpenAI response format"))?;
+
+        Ok(content.to_string())
+    }
+
+    async fn call_anthropic_api(&self, prompt: &str) -> Result<String> {
+        let client = reqwest::Client::new();
+
+        let request_body = serde_json::json!({
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        });
+
+        let response = client
+            .post(&format!("{}/messages", self.base_url))
+            .header("x-api-key", self.api_key.as_ref().unwrap())
+            .header("Content-Type", "application/json")
+            .header("anthropic-version", "2023-06-01")
+            .json(&request_body)
+            .send()
+            .await
+            .map_err(|e| MemvidError::synthesis(format!("Anthropic API request failed: {}", e)))?;
+
+        if !response.status().is_success() {
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(MemvidError::synthesis(format!("Anthropic API error: {}", error_text)));
+        }
+
+        let response_json: serde_json::Value = response.json().await
+            .map_err(|e| MemvidError::synthesis(format!("Failed to parse Anthropic response: {}", e)))?;
+
+        let content = response_json["content"][0]["text"]
+            .as_str()
+            .ok_or_else(|| MemvidError::synthesis("Invalid Anthropic response format"))?;
+
+        Ok(content.to_string())
+    }
+
+    async fn call_openai_compatible_api(&self, prompt: &str) -> Result<String> {
+        // Use OpenAI format for Ollama and other compatible APIs
+        self.call_openai_api(prompt).await
+    }
+}
+
+impl SynthesisStrategy for AiSynthesisStrategy {
+    fn synthesize(&self, context: &SynthesisContext) -> Result<SynthesisResult> {
+        // Since we need async but the trait is sync, we'll use block_in_place
+        let content = tokio::task::block_in_place(|| {
+            tokio::runtime::Handle::current().block_on(async {
+                self.generate_ai_synthesis(context).await
+            })
+        })?;
+
+        // Parse the AI response to extract structured information
+        let key_points = self.extract_key_points(&content, context);
+        let supporting_evidence = self.extract_evidence(&content, context);
+
+        Ok(SynthesisResult {
+            synthesis_type: context.synthesis_type.clone(),
+            content,
+            confidence: 0.85, // AI synthesis generally has high confidence
+            key_points,
+            supporting_evidence,
+            metadata: SynthesisMetadata {
+                generated_at: chrono::Utc::now(),
+                strategy_used: "AiSynthesisStrategy".to_string(),
+                chunks_analyzed: context.relevant_chunks.len(),
+                concepts_involved: context.relevant_concepts.len(),
+                processing_time_ms: 0, // Will be set by caller
+            },
+        })
+    }
+
+    fn get_strategy_name(&self) -> &str {
+        "AiSynthesisStrategy"
+    }
+
+    fn get_confidence_threshold(&self) -> f64 {
+        0.8 // Higher threshold for AI synthesis
+    }
+}
+
+impl AiSynthesisStrategy {
+    fn extract_key_points(&self, content: &str, context: &SynthesisContext) -> Vec<KeyPoint> {
+        // Simple extraction - look for numbered points or bullet points
+        let mut key_points = Vec::new();
+
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("- ") ||
+               trimmed.starts_with("• ") ||
+               (trimmed.len() > 3 && trimmed.chars().nth(0).unwrap().is_ascii_digit() && trimmed.chars().nth(1) == Some('.')) {
+
+                let point_text = if trimmed.starts_with("- ") || trimmed.starts_with("• ") {
+                    trimmed[2..].trim().to_string()
+                } else {
+                    trimmed[3..].trim().to_string()
+                };
+
+                if !point_text.is_empty() && point_text.len() > 10 {
+                    key_points.push(KeyPoint {
+                        point: point_text,
+                        importance: 0.8, // Default importance for AI-extracted points
+                        supporting_chunks: context.relevant_chunks.iter()
+                            .take(3)
+                            .map(|c| c.metadata.id.to_string())
+                            .collect(),
+                        related_concepts: context.relevant_concepts.iter()
+                            .take(3)
+                            .map(|c| c.id.clone())
+                            .collect(),
+                    });
+                }
+            }
+        }
+
+        // If no structured points found, create from concepts
+        if key_points.is_empty() {
+            key_points = context.relevant_concepts.iter()
+                .take(5)
+                .map(|concept| KeyPoint {
+                    point: format!("Key concept: {}", concept.name),
+                    importance: concept.importance_score,
+                    supporting_chunks: concept.related_chunks.clone(),
+                    related_concepts: vec![concept.id.clone()],
+                })
+                .collect();
+        }
+
+        key_points
+    }
+
+    fn extract_evidence(&self, _content: &str, context: &SynthesisContext) -> Vec<Evidence> {
+        // Extract evidence from the most relevant chunks
+        context.relevant_chunks.iter()
+            .take(5)
+            .map(|chunk| Evidence {
+                text: if chunk.content.len() > 300 {
+                    format!("{}...", &chunk.content[..300])
+                } else {
+                    chunk.content.clone()
+                },
+                source: chunk.metadata.source.clone().unwrap_or_default(),
+                confidence: 0.8,
+                chunk_id: chunk.metadata.id.to_string(),
+            })
+            .collect()
+    }
+}

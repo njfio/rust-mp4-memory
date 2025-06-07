@@ -206,6 +206,13 @@ impl MemvidError {
         Self::Codec(message.into())
     }
 
+    /// Create a new synthesis error
+    pub fn synthesis<S: Into<String>>(message: S) -> Self {
+        Self::Generic {
+            message: format!("Synthesis error: {}", message.into()),
+        }
+    }
+
     /// Create a new generic error
     pub fn generic<S: Into<String>>(message: S) -> Self {
         Self::Generic {
