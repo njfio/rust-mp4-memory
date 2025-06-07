@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemVid - Intelligent Memory Management</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <i class="fas fa-brain"></i>
+                    <span>MemVid</span>
+                </div>
+                <div class="nav-menu">
+                    <a href="/" class="nav-link active">
+                        <i class="fas fa-home"></i> Home
+                    </a>
+                    <a href="/memories" class="nav-link">
+                        <i class="fas fa-video"></i> Memories
+                    </a>
+                    <a href="/search" class="nav-link">
+                        <i class="fas fa-search"></i> Search
+                    </a>
+                    <a href="/analytics" class="nav-link">
+                        <i class="fas fa-chart-line"></i> Analytics
+                    </a>
+                    <a href="/dashboard" class="nav-link">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </div>
+                <div class="nav-user">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="username">Anonymous</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Hero Section -->
+            <section class="hero">
+                <div class="hero-content">
+                    <h1>🧠 Intelligent Memory Management</h1>
+                    <p>Transform your knowledge into an intelligent, searchable ecosystem with AI-powered analysis and collaboration.</p>
+                    <div class="hero-actions">
+                        <button class="btn btn-primary" onclick="showQuickSearch()">
+                            <i class="fas fa-search"></i> Quick Search
+                        </button>
+                        <button class="btn btn-secondary" onclick="showMemories()">
+                            <i class="fas fa-video"></i> Browse Memories
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Quick Search -->
+            <section class="quick-search" id="quickSearch" style="display: none;">
+                <div class="search-container">
+                    <h2><i class="fas fa-search"></i> Quick Search</h2>
+                    <div class="search-box">
+                        <input type="text" id="searchInput" placeholder="Search across all memories..." />
+                        <button onclick="performSearch()" class="search-btn">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                    <div class="search-filters">
+                        <label>
+                            <input type="checkbox" id="semanticSearch" checked> Semantic Search
+                        </label>
+                        <label>
+                            <input type="checkbox" id="crossMemory" checked> Cross-Memory Analysis
+                        </label>
+                        <select id="resultLimit">
+                            <option value="10">10 results</option>
+                            <option value="25">25 results</option>
+                            <option value="50">50 results</option>
+                        </select>
+                    </div>
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+            </section>
+
+            <!-- Memory Overview -->
+            <section class="memory-overview">
+                <h2><i class="fas fa-video"></i> Memory Overview</h2>
+                <div class="memory-grid" id="memoryGrid">
+                    <div class="loading">Loading memories...</div>
+                </div>
+            </section>
+
+            <!-- Real-time Activity -->
+            <section class="activity-feed">
+                <h2><i class="fas fa-activity"></i> Real-time Activity</h2>
+                <div class="activity-list" id="activityFeed">
+                    <div class="activity-item">
+                        <i class="fas fa-search text-blue"></i>
+                        <span>System initialized - Ready for collaboration</span>
+                        <time id="systemTime"></time>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features Grid -->
+            <section class="features">
+                <h2><i class="fas fa-star"></i> Platform Features</h2>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <i class="fas fa-brain"></i>
+                        <h3>AI Intelligence</h3>
+                        <p>Automatic concept extraction, knowledge graphs, and intelligent content synthesis.</p>
+                        <button class="btn btn-outline" onclick="window.location.href='/analytics'">Explore AI</button>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-clock"></i>
+                        <h3>Temporal Analysis</h3>
+                        <p>Track knowledge evolution over time with sophisticated diff analysis and trend detection.</p>
+                        <button class="btn btn-outline" onclick="showTemporalAnalysis()">View Timeline</button>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-users"></i>
+                        <h3>Collaboration</h3>
+                        <p>Real-time collaborative editing, memory sharing, and team knowledge building.</p>
+                        <button class="btn btn-outline" onclick="showCollaboration()">Start Collaborating</button>
+                    </div>
+                    <div class="feature-card">
+                        <i class="fas fa-chart-line"></i>
+                        <h3>Analytics Dashboard</h3>
+                        <p>Comprehensive visual analytics with interactive insights and recommendations.</p>
+                        <button class="btn btn-outline" onclick="window.location.href='/dashboard'">View Dashboard</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h4>MemVid Platform</h4>
+                    <p>Intelligent memory management with AI-powered analysis and collaboration.</p>
+                </div>
+                <div class="footer-section">
+                    <h4>Features</h4>
+                    <ul>
+                        <li>Knowledge Graphs</li>
+                        <li>Content Synthesis</li>
+                        <li>Temporal Analysis</li>
+                        <li>Real-time Collaboration</li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Status</h4>
+                    <div class="status-indicator">
+                        <span class="status-dot online"></span>
+                        <span>System Online</span>
+                    </div>
+                    <div class="connection-status">
+                        <span id="connectionStatus">Connected</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <!-- WebSocket Connection -->
+    <script>
+        // Global state
+        let ws = null;
+        let memories = [];
+        let currentUser = 'anonymous';
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeWebSocket();
+            loadMemories();
+            updateSystemTime();
+            setInterval(updateSystemTime, 1000);
+        });
+
+        // WebSocket connection for real-time features
+        function initializeWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            ws = new WebSocket(wsUrl);
+            
+            ws.onopen = function() {
+                console.log('WebSocket connected');
+                updateConnectionStatus('Connected');
+                addActivityItem('WebSocket connection established', 'fas fa-plug text-green');
+            };
+            
+            ws.onmessage = function(event) {
+                console.log('WebSocket message:', event.data);
+                handleWebSocketMessage(JSON.parse(event.data));
+            };
+            
+            ws.onclose = function() {
+                console.log('WebSocket disconnected');
+                updateConnectionStatus('Disconnected');
+                addActivityItem('WebSocket connection lost', 'fas fa-plug text-red');
+                // Attempt to reconnect after 3 seconds
+                setTimeout(initializeWebSocket, 3000);
+            };
+            
+            ws.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                updateConnectionStatus('Error');
+            };
+        }
+
+        // Handle WebSocket messages
+        function handleWebSocketMessage(message) {
+            switch(message.type) {
+                case 'activity':
+                    addActivityItem(message.content, message.icon);
+                    break;
+                case 'memory_update':
+                    loadMemories(); // Refresh memory list
+                    break;
+                case 'search_result':
+                    displaySearchResults(message.results);
+                    break;
+                default:
+                    console.log('Unknown message type:', message.type);
+            }
+        }
+
+        // Load memories from API
+        async function loadMemories() {
+            try {
+                const response = await fetch('/api/memories?user_id=' + currentUser);
+                memories = await response.json();
+                displayMemories();
+            } catch (error) {
+                console.error('Failed to load memories:', error);
+                document.getElementById('memoryGrid').innerHTML = 
+                    '<div class="error">Failed to load memories</div>';
+            }
+        }
+
+        // Display memories in the grid
+        function displayMemories() {
+            const grid = document.getElementById('memoryGrid');
+            
+            if (memories.length === 0) {
+                grid.innerHTML = '<div class="empty-state">No memories found. Create your first memory to get started!</div>';
+                return;
+            }
+
+            grid.innerHTML = memories.map(memory => `
+                <div class="memory-card" onclick="openMemory('${memory.id}')">
+                    <div class="memory-header">
+                        <h3>${memory.name}</h3>
+                        <span class="memory-size">${formatBytes(memory.metadata.size_bytes)}</span>
+                    </div>
+                    <div class="memory-info">
+                        <div class="memory-stat">
+                            <i class="fas fa-cubes"></i>
+                            <span>${memory.metadata.chunk_count} chunks</span>
+                        </div>
+                        <div class="memory-stat">
+                            <i class="fas fa-clock"></i>
+                            <span>${formatDate(memory.metadata.last_accessed)}</span>
+                        </div>
+                    </div>
+                    <div class="memory-tags">
+                        ${memory.metadata.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    </div>
+                    <div class="memory-actions">
+                        <button class="btn btn-sm" onclick="event.stopPropagation(); searchMemory('${memory.id}')">
+                            <i class="fas fa-search"></i>
+                        </button>
+                        <button class="btn btn-sm" onclick="event.stopPropagation(); analyzeMemory('${memory.id}')">
+                            <i class="fas fa-chart-line"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Utility functions
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString();
+        }
+
+        function updateSystemTime() {
+            document.getElementById('systemTime').textContent = new Date().toLocaleTimeString();
+        }
+
+        function updateConnectionStatus(status) {
+            document.getElementById('connectionStatus').textContent = status;
+        }
+
+        function addActivityItem(content, icon) {
+            const feed = document.getElementById('activityFeed');
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            item.innerHTML = `
+                <i class="${icon}"></i>
+                <span>${content}</span>
+                <time>${new Date().toLocaleTimeString()}</time>
+            `;
+            feed.insertBefore(item, feed.firstChild);
+            
+            // Keep only the last 10 items
+            while (feed.children.length > 10) {
+                feed.removeChild(feed.lastChild);
+            }
+        }
+
+        // UI interaction functions
+        function showQuickSearch() {
+            document.getElementById('quickSearch').style.display = 'block';
+            document.getElementById('searchInput').focus();
+        }
+
+        function showMemories() {
+            window.location.href = '/memories';
+        }
+
+        function openMemory(memoryId) {
+            window.location.href = `/memories?id=${memoryId}`;
+        }
+
+        function searchMemory(memoryId) {
+            window.location.href = `/search?memory=${memoryId}`;
+        }
+
+        function analyzeMemory(memoryId) {
+            window.location.href = `/analytics?memory=${memoryId}`;
+        }
+
+        // Search functionality
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+
+            const resultsDiv = document.getElementById('searchResults');
+            resultsDiv.innerHTML = '<div class="loading">Searching...</div>';
+
+            try {
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        query: query,
+                        limit: parseInt(document.getElementById('resultLimit').value)
+                    })
+                });
+
+                const results = await response.json();
+                displaySearchResults(results);
+                
+                addActivityItem(`Search performed: "${query}" (${results.total_count} results)`, 'fas fa-search text-blue');
+            } catch (error) {
+                console.error('Search failed:', error);
+                resultsDiv.innerHTML = '<div class="error">Search failed. Please try again.</div>';
+            }
+        }
+
+        function displaySearchResults(results) {
+            const resultsDiv = document.getElementById('searchResults');
+            
+            if (results.total_count === 0) {
+                resultsDiv.innerHTML = '<div class="empty-state">No results found.</div>';
+                return;
+            }
+
+            resultsDiv.innerHTML = `
+                <div class="search-summary">
+                    Found ${results.total_count} results in ${results.search_time_ms}ms
+                </div>
+                <div class="results-list">
+                    ${results.results.map(result => `
+                        <div class="result-item">
+                            <div class="result-header">
+                                <span class="result-memory">${result.memory_name}</span>
+                                <span class="result-score">${(result.score * 100).toFixed(1)}%</span>
+                            </div>
+                            <div class="result-content">${result.content}</div>
+                            <div class="result-meta">
+                                Frame: ${result.frame_number} | Chunk: ${result.chunk_id}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        // Feature demonstrations
+        function showTemporalAnalysis() {
+            addActivityItem('Temporal analysis feature coming soon!', 'fas fa-clock text-orange');
+        }
+
+        function showCollaboration() {
+            addActivityItem('Collaboration features active - invite team members!', 'fas fa-users text-green');
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+                switch(e.key) {
+                    case 'k':
+                        e.preventDefault();
+                        showQuickSearch();
+                        break;
+                    case 'm':
+                        e.preventDefault();
+                        showMemories();
+                        break;
+                }
+            }
+        });
+    </script>
+    <script src="/static/js/main.js"></script>
+</body>
+</html>

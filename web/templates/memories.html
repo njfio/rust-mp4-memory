@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memories - MemVid</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .memories-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .memories-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .memories-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .memory-filters {
+            background: white;
+            padding: 1.5rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .filter-group label {
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            padding: 0.5rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 0.9rem;
+        }
+        
+        .memories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+        
+        .memory-card {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: var(--transition);
+            cursor: pointer;
+        }
+        
+        .memory-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .memory-thumbnail {
+            height: 200px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3rem;
+            position: relative;
+        }
+        
+        .memory-status {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--dark-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        
+        .memory-status.active {
+            background: var(--success-color);
+            color: white;
+        }
+        
+        .memory-content {
+            padding: 1.5rem;
+        }
+        
+        .memory-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--dark-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .memory-description {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+        
+        .memory-stats {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #666;
+        }
+        
+        .stat-value {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .memory-tags {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .memory-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: space-between;
+        }
+        
+        .action-group {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .memory-progress {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--light-color);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            transition: width 0.3s ease;
+        }
+        
+        .progress-text {
+            font-size: 0.8rem;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .create-memory-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-group textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        
+        .file-upload {
+            border: 2px dashed var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .file-upload:hover {
+            border-color: var(--primary-color);
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .file-upload.dragover {
+            border-color: var(--primary-color);
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .upload-icon {
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+        
+        .upload-text {
+            color: #666;
+            margin-bottom: 0.5rem;
+        }
+        
+        .file-list {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem;
+            background: var(--light-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 0.5rem;
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: flex-end;
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .memories-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .memory-filters {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .memories-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .memory-stats {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <i class="fas fa-brain"></i>
+                    <span>MemVid</span>
+                </div>
+                <div class="nav-menu">
+                    <a href="/" class="nav-link">
+                        <i class="fas fa-home"></i> Home
+                    </a>
+                    <a href="/memories" class="nav-link active">
+                        <i class="fas fa-video"></i> Memories
+                    </a>
+                    <a href="/search" class="nav-link">
+                        <i class="fas fa-search"></i> Search
+                    </a>
+                    <a href="/analytics" class="nav-link">
+                        <i class="fas fa-chart-line"></i> Analytics
+                    </a>
+                    <a href="/dashboard" class="nav-link">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </div>
+                <div class="nav-user">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="username">Anonymous</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Memories Content -->
+        <div class="memories-container">
+            <!-- Header -->
+            <div class="memories-header">
+                <div>
+                    <h1><i class="fas fa-video"></i> Memory Management</h1>
+                    <p>Manage your intelligent memory videos with collaborative features</p>
+                </div>
+                <div class="memories-actions">
+                    <button class="btn btn-primary" onclick="showCreateModal()">
+                        <i class="fas fa-plus"></i> Create Memory
+                    </button>
+                    <button class="btn btn-secondary" onclick="importMemory()">
+                        <i class="fas fa-upload"></i> Import
+                    </button>
+                    <button class="btn btn-outline" onclick="bulkActions()">
+                        <i class="fas fa-tasks"></i> Bulk Actions
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="memory-filters">
+                <div class="filter-group">
+                    <label>Sort by:</label>
+                    <select id="sortBy">
+                        <option value="name">Name</option>
+                        <option value="date">Date Modified</option>
+                        <option value="size">Size</option>
+                        <option value="chunks">Chunk Count</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Filter by tag:</label>
+                    <select id="tagFilter">
+                        <option value="">All tags</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Status:</label>
+                    <select id="statusFilter">
+                        <option value="">All</option>
+                        <option value="active">Active</option>
+                        <option value="processing">Processing</option>
+                        <option value="archived">Archived</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Search:</label>
+                    <input type="text" id="searchFilter" placeholder="Search memories...">
+                </div>
+            </div>
+
+            <!-- Memories Grid -->
+            <div class="memories-grid" id="memoriesGrid">
+                <div class="loading">Loading memories...</div>
+            </div>
+        </div>
+
+        <!-- Create Memory Modal -->
+        <div class="create-memory-modal" id="createModal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Create New Memory</h3>
+                    <button class="close-btn" onclick="hideCreateModal()">&times;</button>
+                </div>
+                
+                <form id="createMemoryForm">
+                    <div class="form-group">
+                        <label for="memoryName">Memory Name</label>
+                        <input type="text" id="memoryName" required placeholder="Enter memory name...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="memoryDescription">Description</label>
+                        <textarea id="memoryDescription" placeholder="Describe this memory..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="memoryTags">Tags (comma-separated)</label>
+                        <input type="text" id="memoryTags" placeholder="ai, research, notes">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Content Files</label>
+                        <div class="file-upload" id="fileUpload">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <div class="upload-text">
+                                <strong>Click to upload</strong> or drag and drop files here
+                            </div>
+                            <div class="upload-text">
+                                Supports: PDF, TXT, MD, CSV, JSON, code files
+                            </div>
+                            <input type="file" id="fileInput" multiple style="display: none;">
+                        </div>
+                        <div class="file-list" id="fileList" style="display: none;"></div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="memoryPrivacy">Privacy Settings</label>
+                        <select id="memoryPrivacy">
+                            <option value="private">Private (only you)</option>
+                            <option value="team">Team (shared with team)</option>
+                            <option value="public">Public (read-only)</option>
+                        </select>
+                    </div>
+                </form>
+                
+                <div class="modal-actions">
+                    <button class="btn btn-outline" onclick="hideCreateModal()">Cancel</button>
+                    <button class="btn btn-primary" onclick="createMemory()">
+                        <i class="fas fa-plus"></i> Create Memory
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let memories = [];
+        let selectedFiles = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMemories();
+            setupEventListeners();
+            setupFileUpload();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('sortBy').addEventListener('change', filterAndSortMemories);
+            document.getElementById('tagFilter').addEventListener('change', filterAndSortMemories);
+            document.getElementById('statusFilter').addEventListener('change', filterAndSortMemories);
+            document.getElementById('searchFilter').addEventListener('input', filterAndSortMemories);
+        }
+
+        function setupFileUpload() {
+            const fileUpload = document.getElementById('fileUpload');
+            const fileInput = document.getElementById('fileInput');
+
+            fileUpload.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+
+            // Drag and drop
+            fileUpload.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                fileUpload.classList.add('dragover');
+            });
+
+            fileUpload.addEventListener('dragleave', () => {
+                fileUpload.classList.remove('dragover');
+            });
+
+            fileUpload.addEventListener('drop', (e) => {
+                e.preventDefault();
+                fileUpload.classList.remove('dragover');
+                handleFileSelect({ target: { files: e.dataTransfer.files } });
+            });
+        }
+
+        function handleFileSelect(event) {
+            const files = Array.from(event.target.files);
+            selectedFiles = [...selectedFiles, ...files];
+            updateFileList();
+        }
+
+        function updateFileList() {
+            const fileList = document.getElementById('fileList');
+            
+            if (selectedFiles.length === 0) {
+                fileList.style.display = 'none';
+                return;
+            }
+
+            fileList.style.display = 'block';
+            fileList.innerHTML = selectedFiles.map((file, index) => `
+                <div class="file-item">
+                    <span><i class="fas fa-file"></i> ${file.name} (${formatBytes(file.size)})</span>
+                    <button type="button" onclick="removeFile(${index})" style="background: none; border: none; color: var(--danger-color); cursor: pointer;">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFileList();
+        }
+
+        async function loadMemories() {
+            try {
+                const response = await fetch('/api/memories?user_id=anonymous');
+                memories = await response.json();
+                displayMemories();
+                updateTagFilter();
+            } catch (error) {
+                console.error('Failed to load memories:', error);
+                document.getElementById('memoriesGrid').innerHTML = 
+                    '<div class="error">Failed to load memories</div>';
+            }
+        }
+
+        function displayMemories() {
+            const grid = document.getElementById('memoriesGrid');
+            
+            if (memories.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state" style="grid-column: 1 / -1; text-align: center; padding: 4rem;">
+                        <i class="fas fa-video" style="font-size: 4rem; color: var(--primary-color); margin-bottom: 1rem;"></i>
+                        <h3>No memories yet</h3>
+                        <p>Create your first memory to get started with intelligent knowledge management.</p>
+                        <button class="btn btn-primary" onclick="showCreateModal()">
+                            <i class="fas fa-plus"></i> Create First Memory
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = memories.map(memory => `
+                <div class="memory-card" onclick="openMemory('${memory.id}')">
+                    <div class="memory-thumbnail">
+                        <i class="fas fa-video"></i>
+                        <div class="memory-status ${getMemoryStatus(memory)}">
+                            ${getMemoryStatusText(memory)}
+                        </div>
+                    </div>
+                    <div class="memory-content">
+                        <h3 class="memory-title">${memory.name}</h3>
+                        <p class="memory-description">${memory.metadata.description || 'No description available'}</p>
+                        
+                        <div class="memory-stats">
+                            <div class="stat-item">
+                                <i class="fas fa-cubes"></i>
+                                <span class="stat-value">${memory.metadata.chunk_count.toLocaleString()}</span>
+                                <span>chunks</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-hdd"></i>
+                                <span class="stat-value">${formatBytes(memory.metadata.size_bytes)}</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-clock"></i>
+                                <span class="stat-value">${formatDate(memory.metadata.last_accessed)}</span>
+                            </div>
+                            <div class="stat-item">
+                                <i class="fas fa-user"></i>
+                                <span class="stat-value">${memory.permissions.owner}</span>
+                            </div>
+                        </div>
+                        
+                        <div class="memory-tags">
+                            ${memory.metadata.tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                        </div>
+                        
+                        <div class="memory-actions">
+                            <div class="action-group">
+                                <button class="btn btn-sm" onclick="event.stopPropagation(); searchMemory('${memory.id}')">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                                <button class="btn btn-sm" onclick="event.stopPropagation(); analyzeMemory('${memory.id}')">
+                                    <i class="fas fa-chart-line"></i>
+                                </button>
+                                <button class="btn btn-sm" onclick="event.stopPropagation(); shareMemory('${memory.id}')">
+                                    <i class="fas fa-share"></i>
+                                </button>
+                            </div>
+                            <div class="action-group">
+                                <button class="btn btn-sm" onclick="event.stopPropagation(); editMemory('${memory.id}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm" onclick="event.stopPropagation(); deleteMemory('${memory.id}')" style="color: var(--danger-color);">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="memory-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: ${getMemoryProgress(memory)}%"></div>
+                            </div>
+                            <div class="progress-text">
+                                <span>Processing: ${getMemoryProgress(memory)}%</span>
+                                <span>${getMemoryStatusText(memory)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateTagFilter() {
+            const tagFilter = document.getElementById('tagFilter');
+            const allTags = [...new Set(memories.flatMap(m => m.metadata.tags))];
+            
+            tagFilter.innerHTML = '<option value="">All tags</option>' + 
+                allTags.map(tag => `<option value="${tag}">${tag}</option>`).join('');
+        }
+
+        function filterAndSortMemories() {
+            let filteredMemories = [...memories];
+            
+            // Apply filters
+            const tagFilter = document.getElementById('tagFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+            
+            if (tagFilter) {
+                filteredMemories = filteredMemories.filter(m => m.metadata.tags.includes(tagFilter));
+            }
+            
+            if (statusFilter) {
+                filteredMemories = filteredMemories.filter(m => getMemoryStatus(m) === statusFilter);
+            }
+            
+            if (searchFilter) {
+                filteredMemories = filteredMemories.filter(m => 
+                    m.name.toLowerCase().includes(searchFilter) ||
+                    (m.metadata.description && m.metadata.description.toLowerCase().includes(searchFilter))
+                );
+            }
+            
+            // Apply sorting
+            const sortBy = document.getElementById('sortBy').value;
+            filteredMemories.sort((a, b) => {
+                switch (sortBy) {
+                    case 'name':
+                        return a.name.localeCompare(b.name);
+                    case 'date':
+                        return new Date(b.metadata.last_accessed) - new Date(a.metadata.last_accessed);
+                    case 'size':
+                        return b.metadata.size_bytes - a.metadata.size_bytes;
+                    case 'chunks':
+                        return b.metadata.chunk_count - a.metadata.chunk_count;
+                    default:
+                        return 0;
+                }
+            });
+            
+            // Update display
+            const originalMemories = memories;
+            memories = filteredMemories;
+            displayMemories();
+            memories = originalMemories;
+        }
+
+        // Utility functions
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString();
+        }
+
+        function getMemoryStatus(memory) {
+            // Simulate different statuses
+            const statuses = ['active', 'processing', 'archived'];
+            return statuses[Math.floor(Math.random() * statuses.length)];
+        }
+
+        function getMemoryStatusText(memory) {
+            const status = getMemoryStatus(memory);
+            return status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
+        function getMemoryProgress(memory) {
+            // Simulate processing progress
+            return Math.floor(Math.random() * 100);
+        }
+
+        // Modal functions
+        function showCreateModal() {
+            document.getElementById('createModal').style.display = 'flex';
+        }
+
+        function hideCreateModal() {
+            document.getElementById('createModal').style.display = 'none';
+            document.getElementById('createMemoryForm').reset();
+            selectedFiles = [];
+            updateFileList();
+        }
+
+        async function createMemory() {
+            const name = document.getElementById('memoryName').value.trim();
+            const description = document.getElementById('memoryDescription').value.trim();
+            const tags = document.getElementById('memoryTags').value.split(',').map(t => t.trim()).filter(t => t);
+            const privacy = document.getElementById('memoryPrivacy').value;
+
+            if (!name) {
+                alert('Please enter a memory name');
+                return;
+            }
+
+            if (selectedFiles.length === 0) {
+                alert('Please select at least one file');
+                return;
+            }
+
+            try {
+                // TODO: Implement actual memory creation
+                console.log('Creating memory:', { name, description, tags, privacy, files: selectedFiles });
+                
+                // Simulate API call
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                alert('Memory created successfully!');
+                hideCreateModal();
+                loadMemories();
+            } catch (error) {
+                console.error('Failed to create memory:', error);
+                alert('Failed to create memory. Please try again.');
+            }
+        }
+
+        // Memory action functions
+        function openMemory(memoryId) {
+            window.location.href = `/memories/${memoryId}`;
+        }
+
+        function searchMemory(memoryId) {
+            window.location.href = `/search?memory=${memoryId}`;
+        }
+
+        function analyzeMemory(memoryId) {
+            window.location.href = `/analytics?memory=${memoryId}`;
+        }
+
+        function shareMemory(memoryId) {
+            const url = `${window.location.origin}/memories/${memoryId}`;
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Memory URL copied to clipboard!');
+            });
+        }
+
+        function editMemory(memoryId) {
+            // TODO: Implement memory editing
+            alert('Memory editing feature coming soon!');
+        }
+
+        function deleteMemory(memoryId) {
+            if (confirm('Are you sure you want to delete this memory? This action cannot be undone.')) {
+                // TODO: Implement memory deletion
+                console.log('Deleting memory:', memoryId);
+                alert('Memory deletion feature coming soon!');
+            }
+        }
+
+        function importMemory() {
+            // TODO: Implement memory import
+            alert('Memory import feature coming soon!');
+        }
+
+        function bulkActions() {
+            // TODO: Implement bulk actions
+            alert('Bulk actions feature coming soon!');
+        }
+    </script>
+</body>
+</html>

@@ -245,6 +245,25 @@ enum Commands {
         #[arg(long, default_value = "html")]
         format: String,
     },
+
+    /// Start web server for browser-based memory management
+    WebServer {
+        /// Bind address for the web server
+        #[arg(short, long, default_value = "127.0.0.1:8080")]
+        bind: String,
+
+        /// Memory video files to load (video1.mp4,index1.json video2.mp4,index2.json)
+        #[arg(short, long)]
+        memories: Vec<String>,
+
+        /// Enable real-time collaboration features
+        #[arg(long)]
+        collaboration: bool,
+
+        /// Enable public access (disable authentication)
+        #[arg(long)]
+        public: bool,
+    },
 }
 
 #[tokio::main]
@@ -369,6 +388,15 @@ async fn main() -> anyhow::Result<()> {
             format,
         } => {
             dashboard_command(memories, output, visualizations, format, config).await?;
+        }
+
+        Commands::WebServer {
+            bind,
+            memories,
+            collaboration,
+            public,
+        } => {
+            web_server_command(bind, memories, collaboration, public, config).await?;
         }
     }
 
@@ -1168,4 +1196,98 @@ fn generate_html_dashboard(
     );
 
     Ok(html)
+}
+
+async fn web_server_command(
+    bind: String,
+    memories: Vec<String>,
+    collaboration: bool,
+    public: bool,
+    config: Config,
+) -> anyhow::Result<()> {
+    use rust_mem_vid::MemoryWebServer;
+
+    info!("🌐 Starting MemVid Web Server...");
+    info!("📍 Bind address: {}", bind);
+    info!("🤝 Collaboration: {}", if collaboration { "enabled" } else { "disabled" });
+    info!("🔓 Public access: {}", if public { "enabled" } else { "disabled" });
+
+    // Create web server
+    let server = MemoryWebServer::new(config);
+
+    // Load memories
+    if !memories.is_empty() {
+        info!("📚 Loading {} memory configurations...", memories.len());
+
+        for memory_config in &memories {
+            let parts: Vec<&str> = memory_config.split(',').collect();
+            if parts.len() != 2 {
+                error!("❌ Invalid memory format: {}. Expected: video.mp4,index.json", memory_config);
+                continue;
+            }
+
+            let video_path = parts[0].trim().to_string();
+            let index_path = parts[1].trim().to_string();
+
+            // Extract memory ID from video filename
+            let memory_id = std::path::Path::new(&video_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("unknown")
+                .to_string();
+
+            match server.load_memory(memory_id.clone(), video_path.clone(), index_path.clone()).await {
+                Ok(_) => {
+                    info!("✅ Loaded memory: {} ({})", memory_id, video_path);
+                }
+                Err(e) => {
+                    error!("❌ Failed to load memory {}: {}", memory_id, e);
+                }
+            }
+        }
+    } else {
+        info!("📝 No memories specified. Server will start with empty memory list.");
+        info!("💡 You can add memories through the web interface or API.");
+    }
+
+    // Print startup information
+    println!("\n🚀 MemVid Web Server Starting...");
+    println!("┌─────────────────────────────────────────────────────────────┐");
+    println!("│                    MemVid Web Platform                     │");
+    println!("├─────────────────────────────────────────────────────────────┤");
+    println!("│ 🌐 Server URL: http://{}                          │", bind);
+    println!("│ 📚 Memories loaded: {}                                      │", memories.len());
+    println!("│ 🤝 Collaboration: {}                                   │", if collaboration { "✅ Enabled " } else { "❌ Disabled" });
+    println!("│ 🔓 Public access: {}                                   │", if public { "✅ Enabled " } else { "❌ Disabled" });
+    println!("├─────────────────────────────────────────────────────────────┤");
+    println!("│ 🎯 Available Features:                                     │");
+    println!("│   • Browser-based memory management                        │");
+    println!("│   • Real-time collaborative editing                        │");
+    println!("│   • Advanced search with AI semantic analysis              │");
+    println!("│   • Interactive analytics dashboards                       │");
+    println!("│   • Knowledge graph visualization                          │");
+    println!("│   • AI-powered content synthesis                           │");
+    println!("├─────────────────────────────────────────────────────────────┤");
+    println!("│ 🔗 Quick Links:                                            │");
+    println!("│   • Home: http://{}/                                │", bind);
+    println!("│   • Search: http://{}/search                        │", bind);
+    println!("│   • Analytics: http://{}/analytics                  │", bind);
+    println!("│   • Dashboard: http://{}/dashboard                  │", bind);
+    println!("│   • API: http://{}/api/                             │", bind);
+    println!("└─────────────────────────────────────────────────────────────┘");
+    println!("\n💡 Press Ctrl+C to stop the server");
+    println!("🔄 Server will auto-reload on file changes in development mode\n");
+
+    // Start the server
+    match server.start(&bind).await {
+        Ok(_) => {
+            info!("✅ Web server started successfully");
+        }
+        Err(e) => {
+            error!("❌ Failed to start web server: {}", e);
+            return Err(e.into());
+        }
+    }
+
+    Ok(())
 }

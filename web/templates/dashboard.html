@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Dashboard - MemVid</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .dashboard-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .dashboard-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+        
+        .metric-card {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            text-align: center;
+            transition: var(--transition);
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .metric-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: var(--primary-color);
+        }
+        
+        .metric-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--dark-color);
+            margin-bottom: 0.5rem;
+        }
+        
+        .metric-label {
+            color: #666;
+            font-size: 1.1rem;
+        }
+        
+        .metric-change {
+            margin-top: 0.5rem;
+            font-size: 0.9rem;
+        }
+        
+        .metric-change.positive {
+            color: var(--success-color);
+        }
+        
+        .metric-change.negative {
+            color: var(--danger-color);
+        }
+        
+        .chart-container {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+        
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        
+        .chart-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .chart-controls {
+            display: flex;
+            gap: 0.5rem;
+        }
+        
+        .chart-canvas {
+            position: relative;
+            height: 300px;
+        }
+        
+        .insights-panel {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+        
+        .insight-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--light-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--info-color);
+        }
+        
+        .insight-icon {
+            font-size: 1.5rem;
+            color: var(--info-color);
+            margin-top: 0.25rem;
+        }
+        
+        .insight-content h4 {
+            margin-bottom: 0.5rem;
+            color: var(--dark-color);
+        }
+        
+        .insight-content p {
+            color: #666;
+            line-height: 1.5;
+        }
+        
+        .recommendations-panel {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+        }
+        
+        .recommendation-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--light-color);
+            border-radius: var(--border-radius);
+            margin-bottom: 1rem;
+            border-left: 4px solid var(--warning-color);
+        }
+        
+        .recommendation-icon {
+            font-size: 1.5rem;
+            color: var(--warning-color);
+            margin-top: 0.25rem;
+        }
+        
+        .recommendation-priority {
+            background: var(--warning-color);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            display: inline-block;
+        }
+        
+        .recommendation-priority.high {
+            background: var(--danger-color);
+        }
+        
+        .recommendation-priority.medium {
+            background: var(--warning-color);
+        }
+        
+        .recommendation-priority.low {
+            background: var(--info-color);
+        }
+        
+        .real-time-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--success-color);
+            font-size: 0.9rem;
+        }
+        
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success-color);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .dashboard-actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .chart-header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+            
+            .dashboard-actions {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <i class="fas fa-brain"></i>
+                    <span>MemVid</span>
+                </div>
+                <div class="nav-menu">
+                    <a href="/" class="nav-link">
+                        <i class="fas fa-home"></i> Home
+                    </a>
+                    <a href="/memories" class="nav-link">
+                        <i class="fas fa-video"></i> Memories
+                    </a>
+                    <a href="/search" class="nav-link">
+                        <i class="fas fa-search"></i> Search
+                    </a>
+                    <a href="/analytics" class="nav-link">
+                        <i class="fas fa-chart-line"></i> Analytics
+                    </a>
+                    <a href="/dashboard" class="nav-link active">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </div>
+                <div class="nav-user">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="username">Anonymous</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Dashboard Content -->
+        <div class="dashboard-container">
+            <!-- Dashboard Header -->
+            <div class="dashboard-header">
+                <h1><i class="fas fa-tachometer-alt"></i> Analytics Dashboard</h1>
+                <p>Real-time insights into your memory ecosystem with AI-powered analysis</p>
+                <div class="real-time-indicator">
+                    <div class="pulse-dot"></div>
+                    <span>Live data updates every 30 seconds</span>
+                </div>
+            </div>
+
+            <!-- Key Metrics -->
+            <div class="dashboard-grid" id="metricsGrid">
+                <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fas fa-video"></i>
+                    </div>
+                    <div class="metric-value" id="totalMemories">0</div>
+                    <div class="metric-label">Total Memories</div>
+                    <div class="metric-change positive" id="memoriesChange">+0 this week</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fas fa-cubes"></i>
+                    </div>
+                    <div class="metric-value" id="totalChunks">0</div>
+                    <div class="metric-label">Total Chunks</div>
+                    <div class="metric-change positive" id="chunksChange">+0 this week</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <div class="metric-value" id="totalSearches">0</div>
+                    <div class="metric-label">Searches Today</div>
+                    <div class="metric-change positive" id="searchesChange">+0% vs yesterday</div>
+                </div>
+
+                <div class="metric-card">
+                    <div class="metric-icon">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <div class="metric-value" id="aiInsights">0</div>
+                    <div class="metric-label">AI Insights Generated</div>
+                    <div class="metric-change positive" id="insightsChange">+0 this week</div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3 class="chart-title">Memory Growth Over Time</h3>
+                    <div class="chart-controls">
+                        <select id="timeRange">
+                            <option value="7d">Last 7 days</option>
+                            <option value="30d">Last 30 days</option>
+                            <option value="90d">Last 90 days</option>
+                            <option value="1y">Last year</option>
+                        </select>
+                        <button class="btn btn-sm" onclick="refreshChart()">
+                            <i class="fas fa-sync"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-canvas">
+                    <canvas id="growthChart"></canvas>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <div class="chart-header">
+                    <h3 class="chart-title">Search Activity & Performance</h3>
+                    <div class="chart-controls">
+                        <button class="btn btn-sm" onclick="toggleChartType()">
+                            <i class="fas fa-chart-bar"></i> Toggle View
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-canvas">
+                    <canvas id="searchChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Insights Panel -->
+            <div class="insights-panel">
+                <h3><i class="fas fa-lightbulb"></i> AI-Generated Insights</h3>
+                <div id="insightsList">
+                    <div class="insight-item">
+                        <div class="insight-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h4>Knowledge Growth Pattern</h4>
+                            <p>Your knowledge base is showing steady growth with periodic bursts of activity. The AI analysis indicates optimal learning patterns with good retention rates.</p>
+                        </div>
+                    </div>
+
+                    <div class="insight-item">
+                        <div class="insight-icon">
+                            <i class="fas fa-search"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h4>Search Behavior Analysis</h4>
+                            <p>Most searches are semantic-based (78%), indicating effective use of AI features. Peak search times are between 9-11 AM and 2-4 PM.</p>
+                        </div>
+                    </div>
+
+                    <div class="insight-item">
+                        <div class="insight-icon">
+                            <i class="fas fa-network-wired"></i>
+                        </div>
+                        <div class="insight-content">
+                            <h4>Knowledge Connections</h4>
+                            <p>Strong concept clustering detected in AI/ML topics. Cross-memory correlations suggest opportunities for knowledge synthesis.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recommendations Panel -->
+            <div class="recommendations-panel">
+                <h3><i class="fas fa-magic"></i> AI Recommendations</h3>
+                <div id="recommendationsList">
+                    <div class="recommendation-item">
+                        <div class="recommendation-icon">
+                            <i class="fas fa-optimize"></i>
+                        </div>
+                        <div class="recommendation-content">
+                            <span class="recommendation-priority medium">Medium Priority</span>
+                            <h4>Optimize Content Organization</h4>
+                            <p>Consider reorganizing content to reduce redundancy and improve searchability. Estimated impact: 25% faster search times.</p>
+                        </div>
+                    </div>
+
+                    <div class="recommendation-item">
+                        <div class="recommendation-icon">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div class="recommendation-content">
+                            <span class="recommendation-priority high">High Priority</span>
+                            <h4>Enable Team Collaboration</h4>
+                            <p>Your knowledge patterns suggest high value from team collaboration. Consider inviting team members to share insights.</p>
+                        </div>
+                    </div>
+
+                    <div class="recommendation-item">
+                        <div class="recommendation-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="recommendation-content">
+                            <span class="recommendation-priority low">Low Priority</span>
+                            <h4>Schedule Regular Updates</h4>
+                            <p>Set up automated memory updates to keep content fresh. Recommended frequency: weekly for active projects.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Actions -->
+            <div class="dashboard-actions">
+                <button class="btn btn-primary" onclick="generateReport()">
+                    <i class="fas fa-file-pdf"></i> Generate Report
+                </button>
+                <button class="btn btn-secondary" onclick="exportData()">
+                    <i class="fas fa-download"></i> Export Data
+                </button>
+                <button class="btn btn-outline" onclick="scheduleAnalysis()">
+                    <i class="fas fa-calendar"></i> Schedule Analysis
+                </button>
+                <button class="btn btn-outline" onclick="shareDashboard()">
+                    <i class="fas fa-share"></i> Share Dashboard
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let growthChart, searchChart;
+        let dashboardData = {};
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeDashboard();
+            loadDashboardData();
+            setupRealTimeUpdates();
+        });
+
+        function initializeDashboard() {
+            initializeCharts();
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            document.getElementById('timeRange').addEventListener('change', updateGrowthChart);
+        }
+
+        function initializeCharts() {
+            // Growth Chart
+            const growthCtx = document.getElementById('growthChart').getContext('2d');
+            growthChart = new Chart(growthCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Total Chunks',
+                        data: [],
+                        borderColor: 'rgb(102, 126, 234)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: 'Memories',
+                        data: [],
+                        borderColor: 'rgb(118, 75, 162)',
+                        backgroundColor: 'rgba(118, 75, 162, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Search Chart
+            const searchCtx = document.getElementById('searchChart').getContext('2d');
+            searchChart = new Chart(searchCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Searches',
+                        data: [],
+                        backgroundColor: 'rgba(102, 126, 234, 0.8)',
+                        borderColor: 'rgb(102, 126, 234)',
+                        borderWidth: 1
+                    }, {
+                        label: 'Avg Response Time (ms)',
+                        data: [],
+                        type: 'line',
+                        borderColor: 'rgb(255, 99, 132)',
+                        backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            position: 'left'
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            grid: {
+                                drawOnChartArea: false,
+                            },
+                        }
+                    }
+                }
+            });
+        }
+
+        async function loadDashboardData() {
+            try {
+                // Load metrics
+                await loadMetrics();
+                
+                // Load chart data
+                await updateGrowthChart();
+                await updateSearchChart();
+                
+                // Load insights and recommendations
+                await loadInsights();
+                await loadRecommendations();
+                
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+                showError('Failed to load dashboard data');
+            }
+        }
+
+        async function loadMetrics() {
+            // Simulate API call - replace with actual API
+            const metrics = {
+                totalMemories: 12,
+                totalChunks: 15847,
+                totalSearches: 234,
+                aiInsights: 67,
+                changes: {
+                    memories: '+2',
+                    chunks: '+1,234',
+                    searches: '+15%',
+                    insights: '+12'
+                }
+            };
+
+            document.getElementById('totalMemories').textContent = metrics.totalMemories.toLocaleString();
+            document.getElementById('totalChunks').textContent = metrics.totalChunks.toLocaleString();
+            document.getElementById('totalSearches').textContent = metrics.totalSearches.toLocaleString();
+            document.getElementById('aiInsights').textContent = metrics.aiInsights.toLocaleString();
+
+            document.getElementById('memoriesChange').textContent = `${metrics.changes.memories} this week`;
+            document.getElementById('chunksChange').textContent = `${metrics.changes.chunks} this week`;
+            document.getElementById('searchesChange').textContent = `${metrics.changes.searches} vs yesterday`;
+            document.getElementById('insightsChange').textContent = `${metrics.changes.insights} this week`;
+        }
+
+        async function updateGrowthChart() {
+            const timeRange = document.getElementById('timeRange').value;
+            
+            // Simulate data - replace with actual API call
+            const data = generateGrowthData(timeRange);
+            
+            growthChart.data.labels = data.labels;
+            growthChart.data.datasets[0].data = data.chunks;
+            growthChart.data.datasets[1].data = data.memories;
+            growthChart.update();
+        }
+
+        async function updateSearchChart() {
+            // Simulate data - replace with actual API call
+            const data = generateSearchData();
+            
+            searchChart.data.labels = data.labels;
+            searchChart.data.datasets[0].data = data.searches;
+            searchChart.data.datasets[1].data = data.responseTimes;
+            searchChart.update();
+        }
+
+        function generateGrowthData(timeRange) {
+            const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
+            const labels = [];
+            const chunks = [];
+            const memories = [];
+            
+            for (let i = days; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                labels.push(date.toLocaleDateString());
+                chunks.push(Math.floor(Math.random() * 1000) + 10000 + i * 50);
+                memories.push(Math.floor(Math.random() * 5) + 5 + Math.floor(i / 30));
+            }
+            
+            return { labels, chunks, memories };
+        }
+
+        function generateSearchData() {
+            const labels = [];
+            const searches = [];
+            const responseTimes = [];
+            
+            for (let i = 6; i >= 0; i--) {
+                const date = new Date();
+                date.setDate(date.getDate() - i);
+                labels.push(date.toLocaleDateString());
+                searches.push(Math.floor(Math.random() * 100) + 50);
+                responseTimes.push(Math.floor(Math.random() * 200) + 100);
+            }
+            
+            return { labels, searches, responseTimes };
+        }
+
+        async function loadInsights() {
+            // Insights are already in the HTML for demo
+            // In a real implementation, these would be loaded from the API
+        }
+
+        async function loadRecommendations() {
+            // Recommendations are already in the HTML for demo
+            // In a real implementation, these would be loaded from the API
+        }
+
+        function setupRealTimeUpdates() {
+            // Update dashboard every 30 seconds
+            setInterval(() => {
+                loadMetrics();
+                updateSearchChart();
+            }, 30000);
+        }
+
+        // Chart interaction functions
+        function refreshChart() {
+            updateGrowthChart();
+            updateSearchChart();
+        }
+
+        function toggleChartType() {
+            if (searchChart.config.type === 'bar') {
+                searchChart.config.type = 'line';
+                searchChart.data.datasets[0].type = 'line';
+            } else {
+                searchChart.config.type = 'bar';
+                searchChart.data.datasets[0].type = 'bar';
+            }
+            searchChart.update();
+        }
+
+        // Action functions
+        function generateReport() {
+            alert('Report generation feature coming soon!');
+        }
+
+        function exportData() {
+            const data = {
+                metrics: dashboardData,
+                timestamp: new Date().toISOString(),
+                charts: {
+                    growth: growthChart.data,
+                    search: searchChart.data
+                }
+            };
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `memvid_dashboard_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function scheduleAnalysis() {
+            alert('Analysis scheduling feature coming soon!');
+        }
+
+        function shareDashboard() {
+            const url = window.location.href;
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Dashboard URL copied to clipboard!');
+            });
+        }
+
+        function showError(message) {
+            console.error(message);
+            // Could show a toast notification here
+        }
+    </script>
+</body>
+</html>

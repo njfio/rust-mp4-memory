@@ -69,6 +69,9 @@ pub mod relationship_analyzers;
 pub mod content_synthesis;
 pub mod analytics_dashboard;
 
+// Web platform module (Phase 2)
+pub mod web_server;
+
 // Re-export main types
 pub use encoder::MemvidEncoder;
 pub use retriever::MemvidRetriever;
@@ -93,6 +96,9 @@ pub use temporal_analysis::{MemorySnapshot, MemoryTimeline, TemporalAnalysisEngi
 pub use knowledge_graph::{KnowledgeGraph, KnowledgeGraphBuilder, ConceptNode, ConceptRelationship};
 pub use content_synthesis::{ContentSynthesizer, SynthesisResult, SynthesisType};
 pub use analytics_dashboard::{AnalyticsDashboard, DashboardOutput, AnalyticsData};
+
+// Re-export Web Platform types
+pub use web_server::{MemoryWebServer, MemoryInstance, MemoryMetadata, MemoryPermissions};
 
 /// Version of the rust_mem_vid library
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

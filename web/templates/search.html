@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search - MemVid</title>
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .search-page {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .advanced-search {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+        
+        .search-form {
+            display: grid;
+            gap: 1.5rem;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        
+        .form-group label {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        
+        .memory-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+        
+        .memory-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem;
+            background: var(--light-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .memory-checkbox:hover {
+            background: var(--border-color);
+        }
+        
+        .memory-checkbox input[type="checkbox"] {
+            margin: 0;
+        }
+        
+        .search-stats {
+            background: var(--light-color);
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+        
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .result-filters {
+            background: white;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .filter-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .results-container {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        
+        .results-header {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .results-body {
+            padding: 2rem;
+        }
+        
+        .result-item {
+            border-bottom: 1px solid var(--border-color);
+            padding: 1.5rem 0;
+        }
+        
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        
+        .result-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        
+        .pagination {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-top: 2rem;
+        }
+        
+        .page-btn {
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border-color);
+            background: white;
+            color: var(--dark-color);
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+        
+        .page-btn:hover,
+        .page-btn.active {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-stats {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .result-filters {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-container">
+                <div class="nav-brand">
+                    <i class="fas fa-brain"></i>
+                    <span>MemVid</span>
+                </div>
+                <div class="nav-menu">
+                    <a href="/" class="nav-link">
+                        <i class="fas fa-home"></i> Home
+                    </a>
+                    <a href="/memories" class="nav-link">
+                        <i class="fas fa-video"></i> Memories
+                    </a>
+                    <a href="/search" class="nav-link active">
+                        <i class="fas fa-search"></i> Search
+                    </a>
+                    <a href="/analytics" class="nav-link">
+                        <i class="fas fa-chart-line"></i> Analytics
+                    </a>
+                    <a href="/dashboard" class="nav-link">
+                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    </a>
+                </div>
+                <div class="nav-user">
+                    <div class="user-info">
+                        <i class="fas fa-user-circle"></i>
+                        <span id="username">Anonymous</span>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="search-page">
+            <h1><i class="fas fa-search"></i> Advanced Search</h1>
+            <p>Search across all your memories with powerful filters and AI-powered analysis.</p>
+
+            <!-- Advanced Search Form -->
+            <div class="advanced-search">
+                <h2>Search Parameters</h2>
+                <form class="search-form" id="searchForm">
+                    <div class="form-group">
+                        <label for="searchQuery">Search Query</label>
+                        <input type="text" id="searchQuery" placeholder="Enter your search query..." required>
+                        <small>Use natural language or specific keywords. AI semantic search is enabled by default.</small>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="searchType">Search Type</label>
+                            <select id="searchType">
+                                <option value="semantic">Semantic Search (AI-powered)</option>
+                                <option value="keyword">Keyword Search</option>
+                                <option value="fuzzy">Fuzzy Search</option>
+                                <option value="exact">Exact Match</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="resultLimit">Result Limit</label>
+                            <select id="resultLimit">
+                                <option value="10">10 results</option>
+                                <option value="25">25 results</option>
+                                <option value="50">50 results</option>
+                                <option value="100">100 results</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Select Memories to Search</label>
+                        <div class="memory-selector" id="memorySelector">
+                            <div class="loading">Loading memories...</div>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dateFrom">Date From</label>
+                            <input type="date" id="dateFrom">
+                        </div>
+                        <div class="form-group">
+                            <label for="dateTo">Date To</label>
+                            <input type="date" id="dateTo">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="tags">Tags (comma-separated)</label>
+                        <input type="text" id="tags" placeholder="ai, research, notes">
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Search
+                    </button>
+                </form>
+            </div>
+
+            <!-- Search Statistics -->
+            <div class="search-stats" id="searchStats" style="display: none;">
+                <div class="stat-item">
+                    <i class="fas fa-clock"></i>
+                    <span>Search time: <strong id="searchTime">0ms</strong></span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-list"></i>
+                    <span>Results: <strong id="resultCount">0</strong></span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-video"></i>
+                    <span>Memories searched: <strong id="memoriesSearched">0</strong></span>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-percentage"></i>
+                    <span>Avg. relevance: <strong id="avgRelevance">0%</strong></span>
+                </div>
+            </div>
+
+            <!-- Result Filters -->
+            <div class="result-filters" id="resultFilters" style="display: none;">
+                <div class="filter-group">
+                    <label>Sort by:</label>
+                    <select id="sortBy">
+                        <option value="relevance">Relevance</option>
+                        <option value="date">Date</option>
+                        <option value="memory">Memory</option>
+                        <option value="size">Content Size</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Order:</label>
+                    <select id="sortOrder">
+                        <option value="desc">Descending</option>
+                        <option value="asc">Ascending</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>
+                        <input type="checkbox" id="showMetadata"> Show metadata
+                    </label>
+                </div>
+                <div class="filter-group">
+                    <label>
+                        <input type="checkbox" id="groupByMemory"> Group by memory
+                    </label>
+                </div>
+            </div>
+
+            <!-- Search Results -->
+            <div class="results-container" id="resultsContainer" style="display: none;">
+                <div class="results-header">
+                    <h3><i class="fas fa-list"></i> Search Results</h3>
+                    <div class="results-actions">
+                        <button class="btn btn-sm" onclick="exportResults()">
+                            <i class="fas fa-download"></i> Export
+                        </button>
+                        <button class="btn btn-sm" onclick="saveSearch()">
+                            <i class="fas fa-save"></i> Save Search
+                        </button>
+                    </div>
+                </div>
+                <div class="results-body" id="resultsBody">
+                    <!-- Results will be populated here -->
+                </div>
+                <div class="pagination" id="pagination">
+                    <!-- Pagination will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let memories = [];
+        let currentResults = [];
+        let currentPage = 1;
+        const resultsPerPage = 10;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadMemories();
+            setupEventListeners();
+            
+            // Check for URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const query = urlParams.get('q');
+            const memoryId = urlParams.get('memory');
+            
+            if (query) {
+                document.getElementById('searchQuery').value = query;
+            }
+            
+            if (memoryId) {
+                // Will be handled after memories load
+                setTimeout(() => selectMemory(memoryId), 1000);
+            }
+        });
+
+        function setupEventListeners() {
+            document.getElementById('searchForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                performSearch();
+            });
+
+            document.getElementById('sortBy').addEventListener('change', sortResults);
+            document.getElementById('sortOrder').addEventListener('change', sortResults);
+            document.getElementById('showMetadata').addEventListener('change', toggleMetadata);
+            document.getElementById('groupByMemory').addEventListener('change', groupResults);
+        }
+
+        async function loadMemories() {
+            try {
+                const response = await fetch('/api/memories?user_id=anonymous');
+                memories = await response.json();
+                displayMemorySelector();
+            } catch (error) {
+                console.error('Failed to load memories:', error);
+                document.getElementById('memorySelector').innerHTML = 
+                    '<div class="error">Failed to load memories</div>';
+            }
+        }
+
+        function displayMemorySelector() {
+            const selector = document.getElementById('memorySelector');
+            
+            if (memories.length === 0) {
+                selector.innerHTML = '<div class="empty-state">No memories available</div>';
+                return;
+            }
+
+            selector.innerHTML = memories.map(memory => `
+                <label class="memory-checkbox">
+                    <input type="checkbox" value="${memory.id}" checked>
+                    <div>
+                        <strong>${memory.name}</strong>
+                        <br>
+                        <small>${memory.metadata.chunk_count} chunks</small>
+                    </div>
+                </label>
+            `).join('');
+        }
+
+        function selectMemory(memoryId) {
+            const checkboxes = document.querySelectorAll('#memorySelector input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                cb.checked = cb.value === memoryId;
+            });
+        }
+
+        async function performSearch() {
+            const query = document.getElementById('searchQuery').value.trim();
+            if (!query) return;
+
+            const selectedMemories = Array.from(document.querySelectorAll('#memorySelector input[type="checkbox"]:checked'))
+                .map(cb => cb.value);
+
+            if (selectedMemories.length === 0) {
+                alert('Please select at least one memory to search.');
+                return;
+            }
+
+            const searchRequest = {
+                query: query,
+                memory_ids: selectedMemories,
+                limit: parseInt(document.getElementById('resultLimit').value),
+                filters: {
+                    date_range: getDateRange(),
+                    tags: getTags()
+                }
+            };
+
+            try {
+                showLoading();
+                const response = await fetch('/api/search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(searchRequest)
+                });
+
+                const results = await response.json();
+                currentResults = results.results;
+                displayResults(results);
+                updateSearchStats(results);
+                showResultsSection();
+            } catch (error) {
+                console.error('Search failed:', error);
+                showError('Search failed. Please try again.');
+            }
+        }
+
+        function getDateRange() {
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            
+            if (dateFrom && dateTo) {
+                return {
+                    start: new Date(dateFrom).toISOString(),
+                    end: new Date(dateTo).toISOString()
+                };
+            }
+            return null;
+        }
+
+        function getTags() {
+            const tagsInput = document.getElementById('tags').value.trim();
+            return tagsInput ? tagsInput.split(',').map(tag => tag.trim()) : null;
+        }
+
+        function displayResults(results) {
+            const resultsBody = document.getElementById('resultsBody');
+            
+            if (results.total_count === 0) {
+                resultsBody.innerHTML = '<div class="empty-state">No results found. Try adjusting your search criteria.</div>';
+                return;
+            }
+
+            const startIndex = (currentPage - 1) * resultsPerPage;
+            const endIndex = startIndex + resultsPerPage;
+            const pageResults = currentResults.slice(startIndex, endIndex);
+
+            resultsBody.innerHTML = pageResults.map(result => `
+                <div class="result-item">
+                    <div class="result-header">
+                        <span class="result-memory">${result.memory_name}</span>
+                        <span class="result-score">${(result.score * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="result-content">${highlightQuery(result.content, document.getElementById('searchQuery').value)}</div>
+                    <div class="result-meta">
+                        <span><i class="fas fa-film"></i> Frame: ${result.frame_number}</span>
+                        <span><i class="fas fa-cube"></i> Chunk: ${result.chunk_id}</span>
+                    </div>
+                    <div class="result-actions">
+                        <button class="btn btn-sm" onclick="viewInContext('${result.memory_id}', ${result.frame_number})">
+                            <i class="fas fa-eye"></i> View in Context
+                        </button>
+                        <button class="btn btn-sm" onclick="analyzeChunk('${result.chunk_id}')">
+                            <i class="fas fa-chart-line"></i> Analyze
+                        </button>
+                        <button class="btn btn-sm" onclick="copyResult('${result.chunk_id}')">
+                            <i class="fas fa-copy"></i> Copy
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            updatePagination();
+        }
+
+        function highlightQuery(content, query) {
+            if (!query) return content;
+            const regex = new RegExp(`(${query})`, 'gi');
+            return content.replace(regex, '<mark>$1</mark>');
+        }
+
+        function updateSearchStats(results) {
+            document.getElementById('searchTime').textContent = `${results.search_time_ms}ms`;
+            document.getElementById('resultCount').textContent = results.total_count;
+            document.getElementById('memoriesSearched').textContent = Object.keys(results.memory_stats).length;
+            
+            const avgRelevance = results.results.length > 0 
+                ? (results.results.reduce((sum, r) => sum + r.score, 0) / results.results.length * 100).toFixed(1)
+                : 0;
+            document.getElementById('avgRelevance').textContent = `${avgRelevance}%`;
+        }
+
+        function updatePagination() {
+            const pagination = document.getElementById('pagination');
+            const totalPages = Math.ceil(currentResults.length / resultsPerPage);
+            
+            if (totalPages <= 1) {
+                pagination.innerHTML = '';
+                return;
+            }
+
+            let paginationHTML = '';
+            
+            // Previous button
+            paginationHTML += `<button class="page-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">
+                <i class="fas fa-chevron-left"></i>
+            </button>`;
+            
+            // Page numbers
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === currentPage || i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    paginationHTML += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    paginationHTML += '<span class="page-ellipsis">...</span>';
+                }
+            }
+            
+            // Next button
+            paginationHTML += `<button class="page-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">
+                <i class="fas fa-chevron-right"></i>
+            </button>`;
+            
+            pagination.innerHTML = paginationHTML;
+        }
+
+        function changePage(page) {
+            currentPage = page;
+            displayResults({ results: currentResults, total_count: currentResults.length });
+        }
+
+        function showLoading() {
+            document.getElementById('resultsBody').innerHTML = '<div class="loading">Searching...</div>';
+            showResultsSection();
+        }
+
+        function showError(message) {
+            document.getElementById('resultsBody').innerHTML = `<div class="error">${message}</div>`;
+            showResultsSection();
+        }
+
+        function showResultsSection() {
+            document.getElementById('searchStats').style.display = 'flex';
+            document.getElementById('resultFilters').style.display = 'flex';
+            document.getElementById('resultsContainer').style.display = 'block';
+        }
+
+        // Result manipulation functions
+        function sortResults() {
+            const sortBy = document.getElementById('sortBy').value;
+            const sortOrder = document.getElementById('sortOrder').value;
+            
+            currentResults.sort((a, b) => {
+                let comparison = 0;
+                switch (sortBy) {
+                    case 'relevance':
+                        comparison = b.score - a.score;
+                        break;
+                    case 'memory':
+                        comparison = a.memory_name.localeCompare(b.memory_name);
+                        break;
+                    case 'size':
+                        comparison = a.content.length - b.content.length;
+                        break;
+                    default:
+                        comparison = 0;
+                }
+                
+                return sortOrder === 'desc' ? comparison : -comparison;
+            });
+            
+            currentPage = 1;
+            displayResults({ results: currentResults, total_count: currentResults.length });
+        }
+
+        function toggleMetadata() {
+            const showMetadata = document.getElementById('showMetadata').checked;
+            const metaElements = document.querySelectorAll('.result-meta');
+            metaElements.forEach(el => {
+                el.style.display = showMetadata ? 'block' : 'none';
+            });
+        }
+
+        function groupResults() {
+            // TODO: Implement grouping by memory
+            console.log('Group by memory not yet implemented');
+        }
+
+        // Action functions
+        function viewInContext(memoryId, frameNumber) {
+            window.open(`/memories?id=${memoryId}&frame=${frameNumber}`, '_blank');
+        }
+
+        function analyzeChunk(chunkId) {
+            window.open(`/analytics?chunk=${chunkId}`, '_blank');
+        }
+
+        function copyResult(chunkId) {
+            const resultItem = document.querySelector(`[onclick*="${chunkId}"]`).closest('.result-item');
+            const content = resultItem.querySelector('.result-content').textContent;
+            navigator.clipboard.writeText(content).then(() => {
+                // Show temporary success message
+                const btn = event.target.closest('button');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                }, 2000);
+            });
+        }
+
+        function exportResults() {
+            const data = currentResults.map(result => ({
+                memory: result.memory_name,
+                content: result.content,
+                score: result.score,
+                frame: result.frame_number,
+                chunk_id: result.chunk_id
+            }));
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `search_results_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function saveSearch() {
+            // TODO: Implement search saving
+            alert('Search saving feature coming soon!');
+        }
+    </script>
+</body>
+</html>
