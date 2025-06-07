@@ -343,14 +343,18 @@ impl MemvidEncoder {
         let video_stats = self.video_encoder.encode_qr_video(&qr_images, output_path, codec).await?;
         info!("Video encoded successfully");
 
-        // Build and save index
-        info!("Building search index...");
-        if let Some(ref mut index_manager) = self.index_manager {
-            index_manager.add_chunks(self.chunks.clone()).await?;
-            index_manager.save(index_path)?;
-            info!("Index saved to {}", index_path);
+        // Build and save index (if enabled)
+        if self.config.search.enable_index_building {
+            info!("Building search index...");
+            if let Some(ref mut index_manager) = self.index_manager {
+                index_manager.add_chunks(self.chunks.clone()).await?;
+                index_manager.save(index_path)?;
+                info!("Index saved to {}", index_path);
+            } else {
+                warn!("No index manager available, skipping index creation");
+            }
         } else {
-            warn!("No index manager available, skipping index creation");
+            info!("Index building disabled in configuration, skipping index creation");
         }
 
         let encoding_time = start_time.elapsed();
@@ -449,14 +453,26 @@ impl MemvidEncoder {
         // Calculate file size
         total_file_size = std::fs::metadata(output_path)?.len();
 
-        // Build and save index
-        info!("Building search index...");
-        if let Some(ref mut index_manager) = self.index_manager {
-            index_manager.add_chunks(self.chunks.clone()).await?;
-            index_manager.save(index_path)?;
-            info!("Index saved to {}", index_path);
+        // Build and save index (if enabled)
+        if self.config.search.enable_index_building {
+            info!("Building search index for {} chunks...", self.chunks.len());
+            let index_start_time = std::time::Instant::now();
+
+            if let Some(ref mut index_manager) = self.index_manager {
+                // Use batched processing for better performance and progress reporting
+                index_manager.add_chunks(self.chunks.clone()).await?;
+
+                let index_time = index_start_time.elapsed();
+                info!("Index building completed in {:.2}s", index_time.as_secs_f64());
+
+                info!("Saving index to {}...", index_path);
+                index_manager.save(index_path)?;
+                info!("Index saved successfully");
+            } else {
+                warn!("No index manager available, skipping index creation");
+            }
         } else {
-            warn!("No index manager available, skipping index creation");
+            info!("Index building disabled in configuration, skipping index creation");
         }
 
         let encoding_time = start_time.elapsed();

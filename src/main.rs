@@ -85,6 +85,10 @@ enum Commands {
         /// Maximum file size to process in MB (default: 100)
         #[arg(long)]
         max_file_size: Option<usize>,
+
+        /// Disable index building for faster processing (search will not be available)
+        #[arg(long)]
+        no_index: bool,
     },
 
     /// Search a QR code video
@@ -302,11 +306,12 @@ async fn main() -> anyhow::Result<()> {
             follow_symlinks,
             include_hidden,
             max_file_size,
+            no_index,
         } => {
             encode_command(
                 output, index, files, dirs, text, codec, chunk_size, overlap,
                 max_depth, include_extensions, exclude_extensions, follow_symlinks,
-                include_hidden, max_file_size, config
+                include_hidden, max_file_size, no_index, config
             ).await?;
         }
 
@@ -418,6 +423,7 @@ async fn encode_command(
     follow_symlinks: bool,
     include_hidden: bool,
     max_file_size: Option<usize>,
+    no_index: bool,
     mut config: Config,
 ) -> anyhow::Result<()> {
     info!("Starting encoding process...");
@@ -451,6 +457,12 @@ async fn encode_command(
 
     if let Some(size_mb) = max_file_size {
         config.folder.max_file_size = size_mb * 1024 * 1024; // Convert MB to bytes
+    }
+
+    // Disable index building if requested
+    if no_index {
+        config.search.enable_index_building = false;
+        info!("Index building disabled - search functionality will not be available");
     }
 
     let mut encoder = MemvidEncoder::new_with_config(config).await?;

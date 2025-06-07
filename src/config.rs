@@ -147,21 +147,24 @@ pub struct EmbeddingConfig {
 pub struct SearchConfig {
     /// Default number of results to return
     pub default_top_k: usize,
-    
+
     /// Maximum number of results
     pub max_top_k: usize,
-    
+
     /// Similarity threshold
     pub similarity_threshold: f32,
-    
+
     /// Use FAISS for vector search
     pub use_faiss: bool,
-    
+
     /// Number of search threads
     pub search_threads: usize,
-    
+
     /// Cache size for decoded frames
     pub cache_size: usize,
+
+    /// Enable index building (disable for faster processing when search isn't needed)
+    pub enable_index_building: bool,
 }
 
 /// Chat configuration
@@ -381,6 +384,7 @@ impl Default for Config {
                 use_faiss: true,
                 search_threads: std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4),
                 cache_size: 1000,
+                enable_index_building: true,
             },
             chat: ChatConfig {
                 default_provider: "openai".to_string(),

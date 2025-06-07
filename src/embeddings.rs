@@ -42,10 +42,26 @@ impl EmbeddingModel {
             return Ok(Vec::new());
         }
 
-        let mut embeddings = Vec::new();
-        for text in texts {
-            embeddings.push(self.simple_text_embedding(text)?);
+        let total_texts = texts.len();
+        if total_texts > 50 {
+            tracing::debug!("Generating embeddings for {} texts...", total_texts);
         }
+
+        let mut embeddings = Vec::with_capacity(total_texts);
+        for (i, text) in texts.iter().enumerate() {
+            embeddings.push(self.simple_text_embedding(text)?);
+
+            // Progress reporting for large batches
+            if total_texts > 100 && (i + 1) % 50 == 0 {
+                tracing::debug!("Generated {}/{} embeddings ({:.1}%)",
+                    i + 1, total_texts, ((i + 1) as f64 / total_texts as f64) * 100.0);
+            }
+        }
+
+        if total_texts > 50 {
+            tracing::debug!("Completed embedding generation for {} texts", total_texts);
+        }
+
         Ok(embeddings)
     }
 

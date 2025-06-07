@@ -59,33 +59,89 @@ impl IndexManager {
             return Ok(());
         }
 
-        // Extract texts for embedding
-        let texts: Vec<String> = chunks.iter().map(|c| c.content.clone()).collect();
-        
-        // Generate embeddings
-        let embeddings = if let Some(ref model) = self.embedding_model {
-            model.embed_batch(&texts).await?
-        } else {
-            return Err(MemvidError::embedding("No embedding model available"));
-        };
+        let total_chunks = chunks.len();
+        tracing::info!("Building search index for {} chunks...", total_chunks);
 
-        // Add to vector index and store metadata
-        for (chunk, embedding) in chunks.into_iter().zip(embeddings.into_iter()) {
+        // Process in smaller batches to provide progress feedback and manage memory
+        let batch_size = 100; // Process embeddings in smaller batches
+        let mut processed = 0;
+
+        for chunk_batch in chunks.chunks(batch_size) {
+            // Extract texts for embedding
+            let texts: Vec<String> = chunk_batch.iter().map(|c| c.content.clone()).collect();
+
+            // Generate embeddings for this batch
+            let embeddings = if let Some(ref model) = self.embedding_model {
+                model.embed_batch(&texts).await?
+            } else {
+                return Err(MemvidError::embedding("No embedding model available"));
+            };
+
+            // Add to vector index and store metadata
+            for (chunk, embedding) in chunk_batch.iter().zip(embeddings.into_iter()) {
+                let chunk_id = self.chunks.len();
+
+                // Create metadata for vector index
+                let mut vector_metadata = HashMap::new();
+                vector_metadata.insert("id".to_string(), chunk_id.to_string());
+                vector_metadata.insert("frame".to_string(), chunk.metadata.frame.to_string());
+                vector_metadata.insert("text".to_string(), chunk.content.clone());
+
+                if let Some(ref source) = chunk.metadata.source {
+                    vector_metadata.insert("source".to_string(), source.clone());
+                }
+
+                // Add to vector index
+                self.vector_index.add_embedding(embedding, vector_metadata)?;
+
+                // Store chunk metadata and text
+                self.chunks.push(chunk.metadata.clone());
+                self.chunk_texts.insert(chunk_id, chunk.content.clone());
+            }
+
+            processed += chunk_batch.len();
+            if processed % 200 == 0 || processed == total_chunks {
+                tracing::info!("Generated embeddings for {}/{} chunks ({:.1}%)",
+                    processed, total_chunks, (processed as f64 / total_chunks as f64) * 100.0);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Add chunks incrementally during streaming processing
+    /// This is more memory efficient for large datasets
+    pub async fn add_chunks_incremental(&mut self, chunks: Vec<TextChunk>) -> Result<()> {
+        if chunks.is_empty() {
+            return Ok(());
+        }
+
+        tracing::debug!("Adding {} chunks to index incrementally", chunks.len());
+
+        // Process chunks individually to minimize memory usage
+        for chunk in chunks {
+            // Generate embedding for this chunk
+            let embedding = if let Some(ref model) = self.embedding_model {
+                model.embed_text(&chunk.content).await?
+            } else {
+                return Err(MemvidError::embedding("No embedding model available"));
+            };
+
             let chunk_id = self.chunks.len();
-            
+
             // Create metadata for vector index
             let mut vector_metadata = HashMap::new();
             vector_metadata.insert("id".to_string(), chunk_id.to_string());
             vector_metadata.insert("frame".to_string(), chunk.metadata.frame.to_string());
             vector_metadata.insert("text".to_string(), chunk.content.clone());
-            
+
             if let Some(ref source) = chunk.metadata.source {
                 vector_metadata.insert("source".to_string(), source.clone());
             }
 
             // Add to vector index
             self.vector_index.add_embedding(embedding, vector_metadata)?;
-            
+
             // Store chunk metadata and text
             self.chunks.push(chunk.metadata);
             self.chunk_texts.insert(chunk_id, chunk.content);
@@ -338,7 +394,6 @@ struct IndexData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::text::TextProcessor;
 
     #[tokio::test]
     async fn test_index_manager() {
