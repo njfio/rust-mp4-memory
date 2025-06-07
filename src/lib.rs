@@ -104,6 +104,12 @@ pub use web_server::{MemoryWebServer, MemoryInstance, MemoryMetadata, MemoryPerm
 // Re-export Background Indexing types
 pub use background_indexing::{BackgroundIndexer, IndexingStatus, submit_background_indexing, get_indexing_status, wait_for_indexing};
 
+// Note: Incremental video building methods are available directly on MemvidEncoder:
+// - MemvidEncoder::load_existing() - Load existing video for incremental building
+// - encoder.append_to_video() - Append new chunks to existing video
+// - MemvidEncoder::merge_videos() - Merge multiple videos into one
+// - encoder.create_incremental_video() - Create video with only new chunks
+
 /// Version of the rust_mem_vid library
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

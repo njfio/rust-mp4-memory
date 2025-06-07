@@ -290,6 +290,37 @@ enum Commands {
         #[arg(long)]
         timeout: Option<u64>,
     },
+
+    /// Append new chunks to existing video (incremental building)
+    Append {
+        /// Existing video file to append to
+        #[arg(long)]
+        video: String,
+        /// Existing index file
+        #[arg(long)]
+        index: String,
+        /// Files to add
+        #[arg(long)]
+        files: Vec<PathBuf>,
+        /// Directories to add
+        #[arg(long)]
+        dirs: Vec<PathBuf>,
+        /// Text chunks to add
+        #[arg(long)]
+        text: Vec<String>,
+    },
+
+    /// Merge multiple videos into one
+    Merge {
+        /// Output video file
+        #[arg(long)]
+        output: String,
+        /// Output index file
+        #[arg(long)]
+        index: String,
+        /// Input videos (comma-separated: video1.mp4,index1.json,video2.mp4,index2.json)
+        videos: String,
+    },
 }
 
 #[tokio::main]
@@ -437,6 +468,14 @@ async fn main() -> anyhow::Result<()> {
 
         Commands::IndexWait { job_id, timeout } => {
             index_wait_command(job_id, timeout, config).await?;
+        }
+
+        Commands::Append { video, index, files, dirs, text } => {
+            append_command(video, index, files, dirs, text, config).await?;
+        }
+
+        Commands::Merge { output, index, videos } => {
+            merge_command(output, index, videos, config).await?;
         }
     }
 
@@ -1445,6 +1484,109 @@ async fn index_wait_command(job_id: String, timeout: Option<u64>, _config: Confi
             println!("❌ Error waiting for job: {}", e);
         }
     }
+
+    Ok(())
+}
+
+async fn append_command(
+    video_path: String,
+    index_path: String,
+    files: Vec<PathBuf>,
+    dirs: Vec<PathBuf>,
+    text: Vec<String>,
+    config: Config,
+) -> anyhow::Result<()> {
+    info!("Appending content to existing video: {}", video_path);
+
+    // Load existing video
+    let mut encoder = MemvidEncoder::load_existing_with_config(&video_path, &index_path, config).await?;
+
+    println!("📹 Loaded existing video with {} chunks", encoder.len());
+
+    // Collect new chunks
+    let mut new_chunks = Vec::new();
+
+    // Add text chunks
+    for text_content in text {
+        encoder.add_chunks(vec![text_content]).await?;
+    }
+
+    // Add files
+    for file_path in files {
+        encoder.add_file(&file_path.to_string_lossy()).await?;
+    }
+
+    // Add directories
+    for dir_path in dirs {
+        encoder.add_directory(&dir_path.to_string_lossy()).await?;
+    }
+
+    let new_chunk_count = encoder.len();
+    if new_chunk_count == 0 {
+        println!("⚠️  No new content to append");
+        return Ok(());
+    }
+
+    println!("📝 Rebuilding video with updated content");
+
+    // Rebuild the video with all content (existing + new)
+    let stats = encoder.build_video(&video_path, &index_path).await?;
+
+    println!("✅ Successfully updated video!");
+    println!("   • Total chunks: {}", stats.total_chunks);
+    println!("   • Total frames: {}", stats.total_frames);
+    println!("   • Encoding time: {:.2}s", stats.encoding_time_seconds);
+    println!("   • Video file: {} ({:.2} MB)",
+             video_path,
+             stats.video_file_size_bytes as f64 / 1024.0 / 1024.0);
+
+    Ok(())
+}
+
+async fn merge_command(
+    output_video: String,
+    output_index: String,
+    videos_arg: String,
+    config: Config,
+) -> anyhow::Result<()> {
+    info!("Merging videos into: {}", output_video);
+
+    // Parse videos argument: "video1.mp4,index1.json,video2.mp4,index2.json"
+    let parts: Vec<&str> = videos_arg.split(',').collect();
+    if parts.len() % 2 != 0 {
+        return Err(anyhow::anyhow!("Videos argument must be pairs of video,index: video1.mp4,index1.json,video2.mp4,index2.json"));
+    }
+
+    let mut video_paths = Vec::new();
+    let mut index_paths = Vec::new();
+
+    for chunk in parts.chunks(2) {
+        video_paths.push(chunk[0]);
+        index_paths.push(chunk[1]);
+    }
+
+    println!("🔗 Merging {} videos:", video_paths.len());
+    for (i, (video, index)) in video_paths.iter().zip(index_paths.iter()).enumerate() {
+        println!("   {}. {} ({})", i + 1, video, index);
+    }
+
+    // Merge videos
+    let stats = MemvidEncoder::merge_videos(
+        &video_paths,
+        &index_paths,
+        &output_video,
+        &output_index,
+        config,
+    ).await?;
+
+    println!("✅ Successfully merged videos!");
+    println!("   • Total chunks: {}", stats.total_chunks);
+    println!("   • Total frames: {}", stats.total_frames);
+    println!("   • Encoding time: {:.2}s", stats.encoding_time_seconds);
+    println!("   • Output video: {} ({:.2} MB)",
+             output_video,
+             stats.video_file_size_bytes as f64 / 1024.0 / 1024.0);
+    println!("   • Output index: {}", output_index);
 
     Ok(())
 }

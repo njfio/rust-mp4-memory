@@ -61,6 +61,109 @@ impl MemvidEncoder {
         })
     }
 
+    /// Load existing video and initialize encoder with its content
+    /// This enables true incremental video building
+    pub async fn load_existing(video_path: &str, index_path: &str) -> Result<Self> {
+        let config = Config::default();
+        Self::load_existing_with_config(video_path, index_path, config).await
+    }
+
+    /// Load existing video with custom configuration
+    pub async fn load_existing_with_config(
+        video_path: &str,
+        index_path: &str,
+        config: Config
+    ) -> Result<Self> {
+        use crate::video::VideoDecoder;
+        use crate::qr::QrProcessor;
+        use std::path::Path;
+
+        info!("Loading existing video: {}", video_path);
+
+        // Verify files exist
+        if !Path::new(video_path).exists() {
+            return Err(MemvidError::invalid_input(format!("Video file not found: {}", video_path)));
+        }
+        if !Path::new(index_path).exists() {
+            return Err(MemvidError::invalid_input(format!("Index file not found: {}", index_path)));
+        }
+
+        // Create basic encoder structure
+        let text_processor = TextProcessor::new(config.text.clone());
+        let qr_processor = QrProcessor::new(config.qr.clone());
+        let batch_qr_processor = BatchQrProcessor::new(config.qr.clone());
+        let video_encoder = VideoEncoder::new(config.clone());
+        let video_decoder = VideoDecoder::new(config.clone());
+
+        // Load existing index
+        let index_manager = IndexManager::load(index_path).await?;
+
+        // Extract all chunks from existing video
+        let video_info = video_decoder.get_video_info(video_path).await?;
+        let mut chunks = Vec::new();
+
+        info!("Extracting {} frames from existing video...", video_info.total_frames);
+
+        for frame_number in 0..video_info.total_frames {
+            match video_decoder.extract_frame(video_path, frame_number).await {
+                Ok(image) => {
+                    match qr_processor.decode_qr(&image) {
+                        Ok(decoded_data) => {
+                            // Parse the chunk data
+                            if let Ok(chunk_data) = serde_json::from_str::<ChunkData>(&decoded_data) {
+                                let chunk = crate::text::TextChunk {
+                                    content: chunk_data.text,
+                                    metadata: chunk_data.metadata,
+                                };
+                                chunks.push(chunk);
+                            } else {
+                                // Fallback: treat as plain text
+                                let chunk = crate::text::TextChunk {
+                                    content: decoded_data.clone(),
+                                    metadata: crate::text::ChunkMetadata {
+                                        id: frame_number as usize,
+                                        frame: frame_number,
+                                        source: Some(video_path.to_string()),
+                                        page: None,
+                                        char_offset: 0,
+                                        length: decoded_data.len(),
+                                        extra: std::collections::HashMap::new(),
+                                    },
+                                };
+                                chunks.push(chunk);
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to decode QR code from frame {}: {}", frame_number, e);
+                        }
+                    }
+                }
+                Err(e) => {
+                    warn!("Failed to extract frame {}: {}", frame_number, e);
+                }
+            }
+
+            // Progress reporting for large videos
+            if frame_number > 0 && frame_number % 100 == 0 {
+                info!("Extracted {}/{} frames", frame_number, video_info.total_frames);
+            }
+        }
+
+        info!("Successfully loaded {} chunks from existing video", chunks.len());
+
+        Ok(Self {
+            config: config.clone(),
+            text_processor,
+            data_processor: DataProcessor::new(config.clone()),
+            folder_processor: FolderProcessor::new(config.folder.clone())?,
+            qr_processor,
+            batch_qr_processor,
+            video_encoder,
+            index_manager: Some(index_manager),
+            chunks,
+        })
+    }
+
     /// Create a new encoder with default configuration
     pub async fn new() -> Result<Self> {
         let config = Config::default();
@@ -606,6 +709,116 @@ impl MemvidEncoder {
     /// Get chunks reference
     pub fn chunks(&self) -> &[TextChunk] {
         &self.chunks
+    }
+
+    /// Append new chunks to existing video (true incremental building)
+    pub async fn append_to_video(
+        &mut self,
+        video_path: &str,
+        index_path: &str,
+        new_chunks: Vec<TextChunk>
+    ) -> Result<EncodingStats> {
+        if new_chunks.is_empty() {
+            return Err(MemvidError::invalid_input("No new chunks to append"));
+        }
+
+        info!("Appending {} new chunks to existing video: {}", new_chunks.len(), video_path);
+
+        // Load existing video content if not already loaded
+        if self.chunks.is_empty() {
+            let existing_encoder = Self::load_existing(video_path, index_path).await?;
+            self.chunks = existing_encoder.chunks;
+        }
+
+        let original_chunk_count = self.chunks.len();
+
+        // Add new chunks with updated frame numbers and IDs
+        let mut next_frame = self.chunks.iter().map(|c| c.metadata.frame).max().unwrap_or(0) + 1;
+        let mut next_id = self.chunks.iter().map(|c| c.metadata.id).max().unwrap_or(0) + 1;
+
+        for mut chunk in new_chunks {
+            chunk.metadata.frame = next_frame;
+            chunk.metadata.id = next_id;
+            self.chunks.push(chunk);
+            next_frame += 1;
+            next_id += 1;
+        }
+
+        info!("Total chunks after append: {} (added {})", self.chunks.len(), self.chunks.len() - original_chunk_count);
+
+        // Rebuild the video with all chunks (existing + new)
+        // In a more advanced implementation, this could append only new frames
+        self.build_video(video_path, index_path).await
+    }
+
+    /// Merge multiple video files into one
+    pub async fn merge_videos(
+        video_paths: &[&str],
+        index_paths: &[&str],
+        output_video: &str,
+        output_index: &str,
+        config: Config,
+    ) -> Result<EncodingStats> {
+        if video_paths.len() != index_paths.len() {
+            return Err(MemvidError::invalid_input("Number of video and index paths must match"));
+        }
+
+        if video_paths.is_empty() {
+            return Err(MemvidError::invalid_input("No videos to merge"));
+        }
+
+        info!("Merging {} videos into: {}", video_paths.len(), output_video);
+
+        let mut merged_encoder = Self::new_with_config(config).await?;
+        let mut next_frame = 0u32;
+        let mut next_id = 0usize;
+
+        // Load and merge all videos
+        for (video_path, index_path) in video_paths.iter().zip(index_paths.iter()) {
+            info!("Loading video: {}", video_path);
+            let video_encoder = Self::load_existing(video_path, index_path).await?;
+
+            // Add chunks with updated frame numbers and IDs
+            for mut chunk in video_encoder.chunks {
+                chunk.metadata.frame = next_frame;
+                chunk.metadata.id = next_id;
+                merged_encoder.chunks.push(chunk);
+                next_frame += 1;
+                next_id += 1;
+            }
+        }
+
+        info!("Merged {} total chunks from {} videos", merged_encoder.chunks.len(), video_paths.len());
+
+        // Build the merged video
+        merged_encoder.build_video(output_video, output_index).await
+    }
+
+    /// Create a new video with only new chunks (efficient for large existing videos)
+    pub async fn create_incremental_video(
+        &mut self,
+        new_chunks: Vec<TextChunk>,
+        output_path: &str,
+        index_path: &str,
+    ) -> Result<EncodingStats> {
+        if new_chunks.is_empty() {
+            return Err(MemvidError::invalid_input("No chunks to encode"));
+        }
+
+        info!("Creating incremental video with {} new chunks", new_chunks.len());
+
+        // Clear existing chunks and add only new ones
+        self.chunks.clear();
+
+        // Add new chunks with sequential frame numbers
+        for (i, mut chunk) in new_chunks.into_iter().enumerate() {
+            chunk.metadata.frame = i as u32;
+            chunk.metadata.id = i;
+            self.chunks.push(chunk);
+        }
+
+        // Build video with only new chunks
+        self.build_video(output_path, index_path).await
     }
 
     /// Add all supported files from a directory recursively

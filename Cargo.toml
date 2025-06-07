@@ -151,6 +151,10 @@ path = "examples/temporal_analysis_demo.rs"
 name = "background_indexing_demo"
 path = "examples/background_indexing_demo.rs"
 
+[[example]]
+name = "incremental_video_demo"
+path = "examples/incremental_video_demo.rs"
+
 [profile.release]
 opt-level = 3
 lto = true
