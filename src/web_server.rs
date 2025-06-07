@@ -124,7 +124,7 @@ pub struct CollaborationEvent {
 }
 
 /// Search request from web interface
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct SearchRequest {
     pub query: String,
     pub memory_ids: Option<Vec<String>>,
@@ -133,7 +133,7 @@ pub struct SearchRequest {
 }
 
 /// Search filters
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct SearchFilters {
     pub tags: Option<Vec<String>>,
     pub date_range: Option<DateRange>,
@@ -141,7 +141,7 @@ pub struct SearchFilters {
 }
 
 /// Date range filter
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DateRange {
     pub start: chrono::DateTime<chrono::Utc>,
     pub end: chrono::DateTime<chrono::Utc>,

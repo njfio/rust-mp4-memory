@@ -12,6 +12,7 @@ use rust_mem_vid::{
     video::Codec,
 };
 use std::time::Duration;
+use std::sync::Arc;
 use tokio::time::timeout;
 use reqwest::Client;
 use serde_json::Value;
@@ -24,7 +25,7 @@ async fn test_web_server_startup() {
     rust_mem_vid::init().await.expect("Failed to initialize library");
 
     let config = Config::default();
-    let server = MemoryWebServer::new(config);
+    let _server = MemoryWebServer::new(config);
 
     // Test that server can be created without errors
     assert!(true); // Server creation successful
@@ -55,7 +56,7 @@ async fn test_memory_loading() {
         .expect("Failed to build video");
 
     // Test loading memory into web server
-    let mut server = MemoryWebServer::new(config);
+    let server = MemoryWebServer::new(config);
     let result = server.load_memory(
         "test_memory".to_string(),
         video_path.to_string(),
@@ -265,11 +266,11 @@ async fn test_concurrent_operations() {
     let _ = tracing_subscriber::fmt().try_init();
     
     let config = Config::default();
-    let server = MemoryWebServer::new(config);
+    let server = Arc::new(MemoryWebServer::new(config));
 
     // Test that multiple concurrent operations don't cause issues
     let handles = (0..10).map(|i| {
-        let server = &server;
+        let server = Arc::clone(&server);
         tokio::spawn(async move {
             let memories = server.list_user_memories(&format!("user{}", i));
             assert!(memories.is_empty());
@@ -286,7 +287,7 @@ async fn test_memory_instance_creation() {
     use rust_mem_vid::web_server::{MemoryInstance, MemoryMetadata, MemoryPermissions};
     use rust_mem_vid::MemvidRetriever;
     use chrono::Utc;
-    use std::sync::Arc;
+
 
     // Create a test memory instance structure
     let metadata = MemoryMetadata {
