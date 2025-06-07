@@ -147,6 +147,10 @@ path = "examples/qr_size_test.rs"
 name = "temporal_analysis_demo"
 path = "examples/temporal_analysis_demo.rs"
 
+[[example]]
+name = "background_indexing_demo"
+path = "examples/background_indexing_demo.rs"
+
 [profile.release]
 opt-level = 3
 lto = true

@@ -56,6 +56,7 @@ pub mod index;
 pub mod text;
 pub mod error;
 pub mod utils;
+pub mod background_indexing;
 
 // New temporal and comparative analysis modules
 pub mod memory_diff;
@@ -99,6 +100,9 @@ pub use analytics_dashboard::{AnalyticsDashboard, DashboardOutput, AnalyticsData
 
 // Re-export Web Platform types
 pub use web_server::{MemoryWebServer, MemoryInstance, MemoryMetadata, MemoryPermissions};
+
+// Re-export Background Indexing types
+pub use background_indexing::{BackgroundIndexer, IndexingStatus, submit_background_indexing, get_indexing_status, wait_for_indexing};
 
 /// Version of the rust_mem_vid library
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

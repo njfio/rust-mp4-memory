@@ -165,6 +165,9 @@ pub struct SearchConfig {
 
     /// Enable index building (disable for faster processing when search isn't needed)
     pub enable_index_building: bool,
+
+    /// Enable background indexing (build index after video creation)
+    pub enable_background_indexing: bool,
 }
 
 /// Chat configuration
@@ -385,6 +388,7 @@ impl Default for Config {
                 search_threads: std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4),
                 cache_size: 1000,
                 enable_index_building: true,
+                enable_background_indexing: false,
             },
             chat: ChatConfig {
                 default_provider: "openai".to_string(),

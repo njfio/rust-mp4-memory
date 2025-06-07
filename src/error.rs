@@ -123,6 +123,10 @@ pub enum MemvidError {
     /// Multiple errors combined
     #[error("Multiple errors: {errors:?}")]
     Multiple { errors: Vec<MemvidError> },
+
+    /// Background indexing errors
+    #[error("Background indexing error: {0}")]
+    BackgroundIndexing(String),
 }
 
 impl MemvidError {
@@ -223,6 +227,11 @@ impl MemvidError {
     /// Combine multiple errors
     pub fn multiple(errors: Vec<MemvidError>) -> Self {
         Self::Multiple { errors }
+    }
+
+    /// Create a new background indexing error
+    pub fn background_indexing<S: Into<String>>(message: S) -> Self {
+        Self::BackgroundIndexing(message.into())
     }
 }
 

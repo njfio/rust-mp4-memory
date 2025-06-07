@@ -89,6 +89,10 @@ enum Commands {
         /// Disable index building for faster processing (search will not be available)
         #[arg(long)]
         no_index: bool,
+
+        /// Enable background indexing (build index after video creation)
+        #[arg(long)]
+        background_index: bool,
     },
 
     /// Search a QR code video
@@ -268,6 +272,24 @@ enum Commands {
         #[arg(long)]
         public: bool,
     },
+
+    /// Check the status of a background indexing job
+    IndexStatus {
+        /// Job ID to check
+        job_id: String,
+    },
+
+    /// List all background indexing jobs
+    IndexJobs,
+
+    /// Wait for a background indexing job to complete
+    IndexWait {
+        /// Job ID to wait for
+        job_id: String,
+        /// Timeout in seconds (optional)
+        #[arg(long)]
+        timeout: Option<u64>,
+    },
 }
 
 #[tokio::main]
@@ -307,11 +329,12 @@ async fn main() -> anyhow::Result<()> {
             include_hidden,
             max_file_size,
             no_index,
+            background_index,
         } => {
             encode_command(
                 output, index, files, dirs, text, codec, chunk_size, overlap,
                 max_depth, include_extensions, exclude_extensions, follow_symlinks,
-                include_hidden, max_file_size, no_index, config
+                include_hidden, max_file_size, no_index, background_index, config
             ).await?;
         }
 
@@ -403,6 +426,18 @@ async fn main() -> anyhow::Result<()> {
         } => {
             web_server_command(bind, memories, collaboration, public, config).await?;
         }
+
+        Commands::IndexStatus { job_id } => {
+            index_status_command(job_id, config).await?;
+        }
+
+        Commands::IndexJobs => {
+            index_jobs_command(config).await?;
+        }
+
+        Commands::IndexWait { job_id, timeout } => {
+            index_wait_command(job_id, timeout, config).await?;
+        }
     }
 
     Ok(())
@@ -424,6 +459,7 @@ async fn encode_command(
     include_hidden: bool,
     max_file_size: Option<usize>,
     no_index: bool,
+    background_index: bool,
     mut config: Config,
 ) -> anyhow::Result<()> {
     info!("Starting encoding process...");
@@ -459,10 +495,15 @@ async fn encode_command(
         config.folder.max_file_size = size_mb * 1024 * 1024; // Convert MB to bytes
     }
 
-    // Disable index building if requested
+    // Configure index building options
     if no_index {
         config.search.enable_index_building = false;
+        config.search.enable_background_indexing = false;
         info!("Index building disabled - search functionality will not be available");
+    } else if background_index {
+        config.search.enable_index_building = false;
+        config.search.enable_background_indexing = true;
+        info!("Background indexing enabled - index will be built after video creation");
     }
 
     let mut encoder = MemvidEncoder::new_with_config(config).await?;
@@ -1309,6 +1350,99 @@ async fn web_server_command(
         Err(e) => {
             error!("❌ Failed to start web server: {}", e);
             return Err(e.into());
+        }
+    }
+
+    Ok(())
+}
+
+async fn index_status_command(job_id: String, _config: Config) -> anyhow::Result<()> {
+    use rust_mem_vid::background_indexing::get_indexing_status;
+
+    match get_indexing_status(&job_id).await {
+        Some(status) => {
+            println!("Job ID: {}", job_id);
+            match status {
+                rust_mem_vid::IndexingStatus::Queued => {
+                    println!("Status: Queued");
+                }
+                rust_mem_vid::IndexingStatus::InProgress { progress } => {
+                    println!("Status: In Progress ({:.1}%)", progress);
+                }
+                rust_mem_vid::IndexingStatus::Completed { duration_seconds } => {
+                    println!("Status: Completed in {:.2}s", duration_seconds);
+                }
+                rust_mem_vid::IndexingStatus::Failed { error } => {
+                    println!("Status: Failed");
+                    println!("Error: {}", error);
+                }
+            }
+        }
+        None => {
+            println!("Job not found: {}", job_id);
+        }
+    }
+
+    Ok(())
+}
+
+async fn index_jobs_command(_config: Config) -> anyhow::Result<()> {
+    use rust_mem_vid::background_indexing::get_background_indexer;
+
+    let indexer = get_background_indexer().await;
+    let jobs = indexer.get_all_job_statuses().await;
+
+    if jobs.is_empty() {
+        println!("No background indexing jobs found");
+        return Ok(());
+    }
+
+    println!("Background Indexing Jobs:");
+    println!("{:<40} {:<15} {:<10}", "Job ID", "Status", "Progress");
+    println!("{}", "-".repeat(70));
+
+    for (job_id, status) in jobs {
+        let (status_str, progress_str) = match status {
+            rust_mem_vid::IndexingStatus::Queued => ("Queued".to_string(), "-".to_string()),
+            rust_mem_vid::IndexingStatus::InProgress { progress } => {
+                ("In Progress".to_string(), format!("{:.1}%", progress))
+            }
+            rust_mem_vid::IndexingStatus::Completed { duration_seconds } => {
+                ("Completed".to_string(), format!("{:.2}s", duration_seconds))
+            }
+            rust_mem_vid::IndexingStatus::Failed { .. } => ("Failed".to_string(), "-".to_string()),
+        };
+
+        println!("{:<40} {:<15} {:<10}", job_id, status_str, progress_str);
+    }
+
+    Ok(())
+}
+
+async fn index_wait_command(job_id: String, timeout: Option<u64>, _config: Config) -> anyhow::Result<()> {
+    use rust_mem_vid::background_indexing::wait_for_indexing;
+
+    println!("Waiting for indexing job: {}", job_id);
+    if let Some(timeout_secs) = timeout {
+        println!("Timeout: {} seconds", timeout_secs);
+    }
+
+    match wait_for_indexing(&job_id, timeout).await {
+        Ok(status) => {
+            match status {
+                rust_mem_vid::IndexingStatus::Completed { duration_seconds } => {
+                    println!("✅ Indexing completed successfully in {:.2}s", duration_seconds);
+                }
+                rust_mem_vid::IndexingStatus::Failed { error } => {
+                    println!("❌ Indexing failed: {}", error);
+                }
+                _ => {
+                    println!("⚠️  Unexpected status: {:?}", status);
+                }
+            }
+        }
+        Err(e) => {
+            println!("❌ Error waiting for job: {}", e);
         }
     }
 

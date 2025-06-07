@@ -353,6 +353,22 @@ impl MemvidEncoder {
             } else {
                 warn!("No index manager available, skipping index creation");
             }
+        } else if self.config.search.enable_background_indexing {
+            // Submit background indexing job
+            info!("Submitting background indexing job for {} chunks...", self.chunks.len());
+            match crate::background_indexing::submit_background_indexing(
+                self.chunks.clone(),
+                std::path::PathBuf::from(index_path),
+                self.config.clone(),
+            ).await {
+                Ok(job_id) => {
+                    info!("Background indexing job submitted: {}", job_id);
+                    info!("Index will be built in the background. Use 'memvid index-status {}' to check progress", job_id);
+                }
+                Err(e) => {
+                    warn!("Failed to submit background indexing job: {}", e);
+                }
+            }
         } else {
             info!("Index building disabled in configuration, skipping index creation");
         }
@@ -470,6 +486,22 @@ impl MemvidEncoder {
                 info!("Index saved successfully");
             } else {
                 warn!("No index manager available, skipping index creation");
+            }
+        } else if self.config.search.enable_background_indexing {
+            // Submit background indexing job
+            info!("Submitting background indexing job for {} chunks...", self.chunks.len());
+            match crate::background_indexing::submit_background_indexing(
+                self.chunks.clone(),
+                std::path::PathBuf::from(index_path),
+                self.config.clone(),
+            ).await {
+                Ok(job_id) => {
+                    info!("Background indexing job submitted: {}", job_id);
+                    info!("Index will be built in the background. Use 'memvid index-status {}' to check progress", job_id);
+                }
+                Err(e) => {
+                    warn!("Failed to submit background indexing job: {}", e);
+                }
             }
         } else {
             info!("Index building disabled in configuration, skipping index creation");
