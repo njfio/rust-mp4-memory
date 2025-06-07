@@ -68,6 +68,10 @@ pub enum MemvidError {
     #[error("HTTP error: {0}")]
     Http(#[from] reqwest::Error),
 
+    /// Regex errors
+    #[error("Regex error: {0}")]
+    Regex(#[from] regex::Error),
+
     /// LLM API errors
     #[error("LLM API error: {0}")]
     LlmApi(String),

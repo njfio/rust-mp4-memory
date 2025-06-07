@@ -192,6 +192,59 @@ enum Commands {
         #[arg(long)]
         tags: Option<Vec<String>>,
     },
+
+    /// Generate knowledge graph from memory videos
+    KnowledgeGraph {
+        /// Memory video files and their indices (video1.mp4,index1.json video2.mp4,index2.json)
+        memories: Vec<String>,
+
+        /// Output path for knowledge graph JSON
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Enable semantic analysis
+        #[arg(long)]
+        semantic: bool,
+
+        /// Minimum concept confidence threshold
+        #[arg(long, default_value = "0.7")]
+        confidence_threshold: f64,
+    },
+
+    /// Generate intelligent content synthesis
+    Synthesize {
+        /// Search query for synthesis
+        query: String,
+
+        /// Memory video files and their indices (video1.mp4,index1.json video2.mp4,index2.json)
+        memories: Vec<String>,
+
+        /// Type of synthesis (summary, insights, contradictions, gaps, recommendations)
+        #[arg(short, long, default_value = "summary")]
+        synthesis_type: String,
+
+        /// Output path for synthesis results
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Generate analytics dashboard
+    Dashboard {
+        /// Memory video files and their indices (video1.mp4,index1.json video2.mp4,index2.json)
+        memories: Vec<String>,
+
+        /// Output directory for dashboard files
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Include visualizations
+        #[arg(long)]
+        visualizations: bool,
+
+        /// Dashboard format (html, json)
+        #[arg(long, default_value = "html")]
+        format: String,
+    },
 }
 
 #[tokio::main]
@@ -289,6 +342,33 @@ async fn main() -> anyhow::Result<()> {
             tags,
         } => {
             multi_search_command(query, memories_config, top_k, correlations, temporal, tags, config).await?;
+        }
+
+        Commands::KnowledgeGraph {
+            memories,
+            output,
+            semantic,
+            confidence_threshold,
+        } => {
+            knowledge_graph_command(memories, output, semantic, confidence_threshold, config).await?;
+        }
+
+        Commands::Synthesize {
+            query,
+            memories,
+            synthesis_type,
+            output,
+        } => {
+            synthesize_command(query, memories, synthesis_type, output, config).await?;
+        }
+
+        Commands::Dashboard {
+            memories,
+            output,
+            visualizations,
+            format,
+        } => {
+            dashboard_command(memories, output, visualizations, format, config).await?;
         }
     }
 
@@ -777,4 +857,315 @@ async fn multi_search_command(
     }
 
     Ok(())
+}
+
+async fn knowledge_graph_command(
+    memories: Vec<String>,
+    output: PathBuf,
+    semantic: bool,
+    confidence_threshold: f64,
+    config: Config,
+) -> anyhow::Result<()> {
+    use rust_mem_vid::knowledge_graph::KnowledgeGraphBuilder;
+    use rust_mem_vid::concept_extractors::{NamedEntityExtractor, KeywordExtractor, TechnicalConceptExtractor};
+    use rust_mem_vid::relationship_analyzers::{CooccurrenceAnalyzer, SemanticSimilarityAnalyzer, HierarchicalAnalyzer};
+
+    info!("Generating knowledge graph from {} memories", memories.len());
+
+    // Parse memory pairs
+    let memory_pairs: Result<Vec<(String, String)>, _> = memories
+        .iter()
+        .map(|m| {
+            let parts: Vec<&str> = m.split(',').collect();
+            if parts.len() != 2 {
+                Err(anyhow::anyhow!("Invalid memory format. Use: video.mp4,index.json"))
+            } else {
+                Ok((parts[0].to_string(), parts[1].to_string()))
+            }
+        })
+        .collect();
+
+    let memory_pairs = memory_pairs?;
+
+    // Build knowledge graph
+    let mut graph_builder = KnowledgeGraphBuilder::new(config);
+
+    if semantic {
+        graph_builder = graph_builder.with_embeddings().await?;
+    }
+
+    // Add extractors
+    graph_builder = graph_builder
+        .add_concept_extractor(Box::new(NamedEntityExtractor::new()?))
+        .add_concept_extractor(Box::new(KeywordExtractor::new()))
+        .add_concept_extractor(Box::new(TechnicalConceptExtractor::new()?));
+
+    // Add analyzers
+    graph_builder = graph_builder
+        .add_relationship_analyzer(Box::new(CooccurrenceAnalyzer::new()?))
+        .add_relationship_analyzer(Box::new(SemanticSimilarityAnalyzer::new()))
+        .add_relationship_analyzer(Box::new(HierarchicalAnalyzer::new()?));
+
+    let knowledge_graph = graph_builder.build_from_memories(&memory_pairs).await?;
+
+    // Save to file
+    let json = serde_json::to_string_pretty(&knowledge_graph)?;
+    std::fs::write(&output, json)?;
+
+    println!("🕸️  Knowledge Graph Generated:");
+    println!("   • Concepts: {}", knowledge_graph.nodes.len());
+    println!("   • Relationships: {}", knowledge_graph.relationships.len());
+    println!("   • Communities: {}", knowledge_graph.communities.len());
+    println!("   • Output: {}", output.display());
+
+    // Show top concepts
+    let mut concepts: Vec<_> = knowledge_graph.nodes.values().collect();
+    concepts.sort_by(|a, b| b.importance_score.partial_cmp(&a.importance_score).unwrap());
+
+    println!("\n🔝 Top Concepts:");
+    for concept in concepts.iter().take(10) {
+        println!("   • {} (importance: {:.2}, type: {:?})",
+                 concept.name, concept.importance_score, concept.concept_type);
+    }
+
+    Ok(())
+}
+
+async fn synthesize_command(
+    query: String,
+    memories: Vec<String>,
+    synthesis_type: String,
+    output: Option<PathBuf>,
+    config: Config,
+) -> anyhow::Result<()> {
+    use rust_mem_vid::content_synthesis::{ContentSynthesizer, SynthesisType, TemplateSynthesisStrategy};
+
+    info!("Generating content synthesis for: '{}'", query);
+
+    // Parse memory pairs
+    let memory_pairs: Result<Vec<(String, String)>, _> = memories
+        .iter()
+        .map(|m| {
+            let parts: Vec<&str> = m.split(',').collect();
+            if parts.len() != 2 {
+                Err(anyhow::anyhow!("Invalid memory format. Use: video.mp4,index.json"))
+            } else {
+                Ok((parts[0].to_string(), parts[1].to_string()))
+            }
+        })
+        .collect();
+
+    let memory_pairs = memory_pairs?;
+
+    // Parse synthesis type
+    let synthesis_type = match synthesis_type.to_lowercase().as_str() {
+        "summary" => SynthesisType::Summary,
+        "insights" => SynthesisType::Insights,
+        "contradictions" => SynthesisType::Contradictions,
+        "gaps" => SynthesisType::KnowledgeGaps,
+        "recommendations" => SynthesisType::Recommendations,
+        _ => {
+            error!("Invalid synthesis type. Use: summary, insights, contradictions, gaps, recommendations");
+            return Ok(());
+        }
+    };
+
+    // Create synthesizer
+    let synthesizer = ContentSynthesizer::new(config)
+        .add_strategy(Box::new(TemplateSynthesisStrategy::new()));
+
+    // Generate synthesis
+    let result = match synthesis_type {
+        SynthesisType::Summary => synthesizer.generate_summary(&query, &memory_pairs).await?,
+        SynthesisType::Insights => synthesizer.extract_insights(&query, &memory_pairs).await?,
+        SynthesisType::Contradictions => synthesizer.find_contradictions(&query, &memory_pairs).await?,
+        SynthesisType::KnowledgeGaps => synthesizer.identify_knowledge_gaps(&query, &memory_pairs).await?,
+        SynthesisType::Recommendations => synthesizer.generate_recommendations(&query, &memory_pairs).await?,
+        _ => unreachable!(),
+    };
+
+    // Output results
+    if let Some(output_path) = output {
+        let json = serde_json::to_string_pretty(&result)?;
+        std::fs::write(&output_path, json)?;
+        println!("💾 Synthesis results saved to: {}", output_path.display());
+    }
+
+    println!("🤖 Content Synthesis Results:");
+    println!("   • Type: {:?}", result.synthesis_type);
+    println!("   • Confidence: {:.1}%", result.confidence * 100.0);
+    println!("   • Key Points: {}", result.key_points.len());
+    println!("   • Supporting Evidence: {}", result.supporting_evidence.len());
+    println!("\n📄 Content:");
+    println!("{}", result.content);
+
+    if !result.key_points.is_empty() {
+        println!("\n🔑 Key Points:");
+        for (i, point) in result.key_points.iter().enumerate() {
+            println!("   {}. {} (importance: {:.2})", i + 1, point.point, point.importance);
+        }
+    }
+
+    Ok(())
+}
+
+async fn dashboard_command(
+    memories: Vec<String>,
+    output: PathBuf,
+    visualizations: bool,
+    format: String,
+    config: Config,
+) -> anyhow::Result<()> {
+    use rust_mem_vid::analytics_dashboard::{AnalyticsDashboard, RawAnalyticsData};
+
+    info!("Generating analytics dashboard for {} memories", memories.len());
+
+    // Parse memory pairs
+    let memory_pairs: Result<Vec<(String, String)>, _> = memories
+        .iter()
+        .map(|m| {
+            let parts: Vec<&str> = m.split(',').collect();
+            if parts.len() != 2 {
+                Err(anyhow::anyhow!("Invalid memory format. Use: video.mp4,index.json"))
+            } else {
+                Ok((parts[0].to_string(), parts[1].to_string()))
+            }
+        })
+        .collect();
+
+    let memory_pairs = memory_pairs?;
+
+    // Create dashboard
+    let dashboard = AnalyticsDashboard::new(config);
+
+    // Create mock raw data (in a real implementation, this would load actual data)
+    let raw_data = RawAnalyticsData {
+        timelines: Vec::new(),
+        snapshots: Vec::new(),
+        diffs: Vec::new(),
+        knowledge_graphs: Vec::new(),
+        query_logs: Vec::new(),
+        performance_metrics: Vec::new(),
+    };
+
+    // Generate dashboard
+    let dashboard_output = dashboard.generate_dashboard(raw_data).await?;
+
+    // Create output directory
+    std::fs::create_dir_all(&output)?;
+
+    // Save dashboard data
+    match format.to_lowercase().as_str() {
+        "json" => {
+            let json = serde_json::to_string_pretty(&dashboard_output)?;
+            let json_path = output.join("dashboard.json");
+            std::fs::write(&json_path, json)?;
+            println!("📊 Dashboard saved as JSON: {}", json_path.display());
+        }
+        "html" => {
+            // Generate HTML dashboard
+            let html_content = generate_html_dashboard(&dashboard_output, visualizations)?;
+            let html_path = output.join("dashboard.html");
+            std::fs::write(&html_path, html_content)?;
+            println!("📊 Dashboard saved as HTML: {}", html_path.display());
+        }
+        _ => {
+            error!("Invalid format. Use: html, json");
+            return Ok(());
+        }
+    }
+
+    println!("\n📈 Dashboard Summary:");
+    println!("   • Visualizations: {}", dashboard_output.visualizations.len());
+    println!("   • Insights: {}", dashboard_output.insights.len());
+    println!("   • Recommendations: {}", dashboard_output.recommendations.len());
+    println!("   • Data Sources: {}", dashboard_output.metadata.data_sources);
+
+    // Show insights
+    if !dashboard_output.insights.is_empty() {
+        println!("\n💡 Key Insights:");
+        for insight in dashboard_output.insights.iter().take(5) {
+            println!("   • {} (importance: {:.1}%)", insight.title, insight.importance * 100.0);
+        }
+    }
+
+    Ok(())
+}
+
+fn generate_html_dashboard(
+    dashboard_output: &rust_mem_vid::analytics_dashboard::DashboardOutput,
+    _include_visualizations: bool,
+) -> anyhow::Result<String> {
+    let html = format!(r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemVid Analytics Dashboard</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }}
+        .container {{ max-width: 1200px; margin: 0 auto; }}
+        .header {{ background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; }}
+        .card {{ background: white; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }}
+        .metric {{ display: inline-block; margin: 10px; padding: 15px; background: #f8f9fa; border-radius: 5px; }}
+        .insight {{ border-left: 4px solid #28a745; padding-left: 15px; margin: 10px 0; }}
+        .recommendation {{ border-left: 4px solid #007bff; padding-left: 15px; margin: 10px 0; }}
+        .importance {{ font-weight: bold; color: #dc3545; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 MemVid Analytics Dashboard</h1>
+            <p>Generated on {}</p>
+        </div>
+
+        <div class="card">
+            <h2>📊 Overview</h2>
+            <div class="metric">
+                <strong>Data Sources:</strong> {}
+            </div>
+            <div class="metric">
+                <strong>Visualizations:</strong> {}
+            </div>
+            <div class="metric">
+                <strong>Insights:</strong> {}
+            </div>
+            <div class="metric">
+                <strong>Recommendations:</strong> {}
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>💡 Key Insights</h2>
+            {}
+        </div>
+
+        <div class="card">
+            <h2>🎯 Recommendations</h2>
+            {}
+        </div>
+    </div>
+</body>
+</html>
+"#,
+        dashboard_output.metadata.generated_at.format("%Y-%m-%d %H:%M:%S UTC"),
+        dashboard_output.metadata.data_sources,
+        dashboard_output.visualizations.len(),
+        dashboard_output.insights.len(),
+        dashboard_output.recommendations.len(),
+        dashboard_output.insights.iter()
+            .map(|i| format!(r#"<div class="insight"><strong>{}</strong><br>{}<br><span class="importance">Importance: {:.1}%</span></div>"#,
+                           i.title, i.description, i.importance * 100.0))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        dashboard_output.recommendations.iter()
+            .map(|r| format!(r#"<div class="recommendation"><strong>{}</strong> [{}]<br>{}<br><span class="importance">Impact: {:.1}%</span></div>"#,
+                           r.title, r.priority, r.description, r.estimated_impact * 100.0))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+
+    Ok(html)
 }

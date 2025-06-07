@@ -62,6 +62,13 @@ pub mod memory_diff;
 pub mod multi_memory;
 pub mod temporal_analysis;
 
+// AI Intelligence modules (Phase 1)
+pub mod knowledge_graph;
+pub mod concept_extractors;
+pub mod relationship_analyzers;
+pub mod content_synthesis;
+pub mod analytics_dashboard;
+
 // Re-export main types
 pub use encoder::MemvidEncoder;
 pub use retriever::MemvidRetriever;
@@ -81,6 +88,11 @@ pub use video::{VideoEncoder, VideoDecoder, Codec};
 pub use memory_diff::{MemoryDiff, MemoryDiffEngine, DiffSummary, ChunkDiff, ChunkModification};
 pub use multi_memory::{MultiMemoryEngine, MultiMemorySearchResult, MemoryInfo, GlobalMemoryStats};
 pub use temporal_analysis::{MemorySnapshot, MemoryTimeline, TemporalAnalysisEngine, TimelineAnalysis};
+
+// Re-export AI Intelligence types
+pub use knowledge_graph::{KnowledgeGraph, KnowledgeGraphBuilder, ConceptNode, ConceptRelationship};
+pub use content_synthesis::{ContentSynthesizer, SynthesisResult, SynthesisType};
+pub use analytics_dashboard::{AnalyticsDashboard, DashboardOutput, AnalyticsData};
 
 /// Version of the rust_mem_vid library
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
