@@ -498,7 +498,10 @@ async fn encode_command(
     // Parse codec
     let codec = Codec::from_str(&codec)?;
 
-    // Build video
+    // Build video with progress reporting
+    info!("🎬 Starting video encoding process...");
+    info!("📊 Total chunks to process: {}", encoder.len());
+
     let stats = match encoder.build_video_with_codec(&output, &index, Some(codec)).await {
         Ok(stats) => stats,
         Err(e) => {
@@ -519,17 +522,25 @@ async fn encode_command(
         }
     };
 
-    // Print results
+    // Print results with performance information
     println!("✅ Encoding completed successfully!");
     println!("📊 Statistics:");
     println!("   • Total chunks: {}", stats.total_chunks);
-    println!("   • Total characters: {}", stats.total_characters);
-    println!("   • Video file: {} ({})", output, format_file_size(stats.video_stats.file_size_bytes));
-    println!("   • Duration: {:.1}s", stats.video_stats.duration_seconds);
-    println!("   • FPS: {:.1}", stats.video_stats.fps);
-    println!("   • Codec: {}", stats.video_stats.codec);
-    println!("   • Encoding time: {}", format_duration(stats.encoding_time_seconds));
+    println!("   • Total frames: {}", stats.total_frames);
+    println!("   • Video file: {} ({})", output, format_file_size(stats.video_file_size_bytes));
+    println!("   • Compression ratio: {:.2}x", stats.compression_ratio);
+    println!("   • Total encoding time: {}", format_duration(stats.encoding_time_seconds));
+    println!("   • Video encoding time: {}", format_duration(stats.video_encoding_time_seconds));
     println!("   • Index file: {}", index);
+
+    // Performance tips for large datasets
+    if stats.total_chunks > 1000 {
+        println!("");
+        println!("💡 Performance tip: For datasets with {}+ chunks, consider:", stats.total_chunks);
+        println!("   • Using smaller chunk sizes (--chunk-size 800)");
+        println!("   • Processing files in smaller batches");
+        println!("   • Using file filtering options");
+    }
 
     // Print folder processing statistics if any directories were processed
     if !total_folder_stats.is_empty() {

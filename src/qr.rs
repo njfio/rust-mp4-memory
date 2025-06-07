@@ -255,16 +255,45 @@ impl BatchQrProcessor {
         }
     }
 
-    /// Encode multiple text chunks to QR codes in parallel
+    /// Encode multiple text chunks to QR codes in parallel with progress reporting
     pub async fn encode_batch(&self, chunks: &[String]) -> Result<Vec<DynamicImage>> {
         use rayon::prelude::*;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let total_chunks = chunks.len();
+        let progress_counter = Arc::new(AtomicUsize::new(0));
+
+        tracing::info!("Encoding {} chunks to QR codes in parallel", total_chunks);
 
         let results: Result<Vec<_>> = chunks
             .par_iter()
-            .map(|chunk| self.processor.encode_to_qr(chunk))
+            .enumerate()
+            .map(|(idx, chunk)| {
+                let progress = Arc::clone(&progress_counter);
+
+                let result = self.processor.encode_to_qr(chunk);
+
+                // Update progress
+                let completed = progress.fetch_add(1, Ordering::Relaxed) + 1;
+                if completed % 50 == 0 || completed == total_chunks {
+                    tracing::info!("Encoded {}/{} QR codes ({:.1}%)",
+                        completed, total_chunks,
+                        (completed as f64 / total_chunks as f64) * 100.0);
+                }
+
+                result.map_err(|e| {
+                    crate::error::MemvidError::qr_code(format!(
+                        "Failed to encode chunk {} (length: {}): {}",
+                        idx, chunk.len(), e
+                    ))
+                })
+            })
             .collect();
 
-        results
+        let qr_images = results?;
+        tracing::info!("Successfully encoded all {} chunks to QR codes", total_chunks);
+        Ok(qr_images)
     }
 
     /// Decode multiple QR codes in parallel

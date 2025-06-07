@@ -36,8 +36,17 @@ impl MemvidRetriever {
             return Err(MemvidError::file_not_found(video_path));
         }
 
-        if !Path::new(index_path).exists() {
-            return Err(MemvidError::file_not_found(index_path));
+        // Check if index files exist (metadata and vector files)
+        let base_path = Path::new(index_path);
+        let metadata_path = base_path.with_extension("metadata");
+        let vector_path = base_path.with_extension("vector");
+
+        if !metadata_path.exists() {
+            return Err(MemvidError::file_not_found(&format!("{} (metadata file not found)", index_path)));
+        }
+
+        if !vector_path.exists() {
+            return Err(MemvidError::file_not_found(&format!("{} (vector file not found)", index_path)));
         }
 
         let qr_processor = QrProcessor::new(config.qr.clone());

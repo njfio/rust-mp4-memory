@@ -1,17 +1,17 @@
 //! Main encoding functionality for creating QR code videos
 
-use image::DynamicImage;
 use std::path::Path;
 use tracing::{info, warn, error, debug};
 
 use crate::config::Config;
+use crate::video::VideoMetadata;
 use crate::data::{DataProcessor, DataFileType};
 use crate::error::{MemvidError, Result};
 use crate::folder::{FolderProcessor, FolderStats};
 use crate::index::IndexManager;
 use crate::qr::{QrProcessor, BatchQrProcessor};
 use crate::text::{TextProcessor, TextChunk};
-use crate::video::{VideoEncoder, Codec, VideoStats};
+use crate::video::{VideoEncoder, Codec};
 
 /// Analysis of chunk sizes and optimization recommendations
 #[derive(Debug, Clone)]
@@ -279,7 +279,7 @@ impl MemvidEncoder {
         Ok(())
     }
 
-    /// Build QR code video with specific codec
+    /// Build QR code video with specific codec (optimized for large datasets)
     pub async fn build_video_with_codec(
         &mut self,
         output_path: &str,
@@ -301,6 +301,27 @@ impl MemvidEncoder {
         self.optimize_chunks_for_qr()?;
         info!("Optimized to {} chunks", self.chunks.len());
 
+        let start_time = std::time::Instant::now();
+
+        // Check if we should use streaming processing for very large datasets
+        let use_streaming = self.chunks.len() > 1000;
+
+        if use_streaming {
+            info!("Using streaming processing for large dataset ({} chunks)", self.chunks.len());
+            self.build_video_streaming(output_path, index_path, codec).await
+        } else {
+            info!("Using batch processing for dataset ({} chunks)", self.chunks.len());
+            self.build_video_batch(output_path, index_path, codec).await
+        }
+    }
+
+    /// Build video using batch processing (for smaller datasets)
+    async fn build_video_batch(
+        &mut self,
+        output_path: &str,
+        index_path: &str,
+        codec: Codec,
+    ) -> Result<EncodingStats> {
         let start_time = std::time::Instant::now();
 
         // Generate QR codes for all chunks
@@ -332,22 +353,146 @@ impl MemvidEncoder {
             warn!("No index manager available, skipping index creation");
         }
 
-        let total_time = start_time.elapsed();
+        let encoding_time = start_time.elapsed();
 
-        let stats = EncodingStats {
+        Ok(EncodingStats {
             total_chunks: self.chunks.len(),
-            total_characters: self.chunks.iter().map(|c| c.content.len()).sum(),
-            video_stats,
-            encoding_time_seconds: total_time.as_secs_f64(),
-            qr_generation_time_seconds: 0.0, // TODO: measure separately
-            index_build_time_seconds: 0.0,   // TODO: measure separately
+            total_frames: video_stats.frame_count as usize,
+            encoding_time_seconds: encoding_time.as_secs_f64(),
+            video_file_size_bytes: video_stats.file_size_bytes,
+            compression_ratio: self.calculate_compression_ratio(&video_stats),
+            qr_generation_time_seconds: 0.0, // TODO: Track separately
+            video_encoding_time_seconds: video_stats.encoding_time_seconds,
+            index_building_time_seconds: 0.0, // TODO: Track separately
+        })
+    }
+
+    /// Build video using streaming processing (for large datasets)
+    async fn build_video_streaming(
+        &mut self,
+        output_path: &str,
+        index_path: &str,
+        codec: Codec,
+    ) -> Result<EncodingStats> {
+        use std::path::Path;
+
+        let start_time = std::time::Instant::now();
+        let total_chunks = self.chunks.len();
+        let batch_size = 500; // Process in smaller batches to manage memory
+
+        info!("Processing {} chunks in streaming batches of {}", total_chunks, batch_size);
+
+        // Create output directory structure
+        if let Some(parent) = Path::new(output_path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let base_path = Path::new(output_path).with_extension("");
+        let frames_dir = format!("{}_frames", base_path.to_string_lossy());
+        std::fs::create_dir_all(&frames_dir)?;
+
+        let mut total_frames = 0u32;
+        let mut total_file_size = 0u64;
+
+        // Process chunks in batches
+        for (batch_idx, chunk_batch) in self.chunks.chunks(batch_size).enumerate() {
+            let batch_start = batch_idx * batch_size;
+            info!("Processing batch {}/{} (chunks {}-{})",
+                batch_idx + 1,
+                (total_chunks + batch_size - 1) / batch_size,
+                batch_start,
+                std::cmp::min(batch_start + batch_size, total_chunks) - 1
+            );
+
+            // Generate QR codes for this batch
+            let chunk_texts: Vec<String> = chunk_batch.iter().map(|c| {
+                serde_json::to_string(&ChunkData {
+                    id: c.metadata.id,
+                    text: c.content.clone(),
+                    frame: c.metadata.frame,
+                    metadata: c.metadata.clone(),
+                }).unwrap_or_else(|_| c.content.clone())
+            }).collect();
+
+            let qr_images = self.batch_qr_processor.encode_batch(&chunk_texts).await?;
+
+            // Save frames for this batch
+            for (i, image) in qr_images.iter().enumerate() {
+                let frame_idx = batch_start + i;
+                let frame_path = format!("{}/frame_{:06}.png", frames_dir, frame_idx);
+                image.save(&frame_path)?;
+                total_frames += 1;
+            }
+
+            // Clear memory by dropping the QR images
+            drop(qr_images);
+
+            if batch_idx % 5 == 0 {
+                info!("Completed {} batches, {} frames processed", batch_idx + 1, total_frames);
+            }
+        }
+
+        // Create video metadata
+        let codec_config = self.config.get_codec_config(codec.as_str())?;
+        let video_metadata = VideoMetadata {
+            frame_count: total_frames,
+            fps: codec_config.fps,
+            width: codec_config.width,
+            height: codec_config.height,
+            codec: codec.as_str().to_string(),
+            frames_dir: frames_dir.clone(),
         };
 
-        info!("Encoding completed in {:.2} seconds", stats.encoding_time_seconds);
-        info!("Video file: {} ({:.2} MB)", output_path, stats.video_stats.file_size_bytes as f64 / 1024.0 / 1024.0);
-        info!("Index file: {}", index_path);
+        let metadata_json = serde_json::to_string_pretty(&video_metadata)?;
+        std::fs::write(output_path, metadata_json)?;
 
-        Ok(stats)
+        // Calculate file size
+        total_file_size = std::fs::metadata(output_path)?.len();
+
+        // Build and save index
+        info!("Building search index...");
+        if let Some(ref mut index_manager) = self.index_manager {
+            index_manager.add_chunks(self.chunks.clone()).await?;
+            index_manager.save(index_path)?;
+            info!("Index saved to {}", index_path);
+        } else {
+            warn!("No index manager available, skipping index creation");
+        }
+
+        let encoding_time = start_time.elapsed();
+
+        // Create video stats for compatibility
+        let video_stats = crate::video::VideoStats {
+            frame_count: total_frames,
+            duration_seconds: total_frames as f64 / codec_config.fps,
+            file_size_bytes: total_file_size,
+            encoding_time_seconds: encoding_time.as_secs_f64(),
+            codec: codec.as_str().to_string(),
+            fps: codec_config.fps,
+            width: codec_config.width,
+            height: codec_config.height,
+        };
+
+        Ok(EncodingStats {
+            total_chunks: self.chunks.len(),
+            total_frames: total_frames as usize,
+            encoding_time_seconds: encoding_time.as_secs_f64(),
+            video_file_size_bytes: total_file_size,
+            compression_ratio: self.calculate_compression_ratio(&video_stats),
+            qr_generation_time_seconds: 0.0, // TODO: Track separately
+            video_encoding_time_seconds: video_stats.encoding_time_seconds,
+            index_building_time_seconds: 0.0, // TODO: Track separately
+        })
+    }
+
+    /// Calculate compression ratio for video stats
+    fn calculate_compression_ratio(&self, video_stats: &crate::video::VideoStats) -> f64 {
+        let total_text_bytes: usize = self.chunks.iter().map(|c| c.content.len()).sum();
+        if total_text_bytes > 0 {
+            video_stats.file_size_bytes as f64 / total_text_bytes as f64
+        } else {
+            0.0
+        }
     }
 
     /// Get encoding statistics
@@ -522,11 +667,13 @@ struct ChunkData {
 #[derive(Debug, Clone)]
 pub struct EncodingStats {
     pub total_chunks: usize,
-    pub total_characters: usize,
-    pub video_stats: VideoStats,
+    pub total_frames: usize,
     pub encoding_time_seconds: f64,
+    pub video_file_size_bytes: u64,
+    pub compression_ratio: f64,
     pub qr_generation_time_seconds: f64,
-    pub index_build_time_seconds: f64,
+    pub video_encoding_time_seconds: f64,
+    pub index_building_time_seconds: f64,
 }
 
 /// Encoder statistics
@@ -542,7 +689,6 @@ pub struct MemvidEncoderStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::NamedTempFile;
 
     #[tokio::test]
     async fn test_encoder_creation() {

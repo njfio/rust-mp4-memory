@@ -60,7 +60,7 @@ impl VideoEncoder {
         Self::new(Config::default())
     }
 
-    /// Encode QR code images into a video file (simplified implementation)
+    /// Encode QR code images into a video file (optimized implementation)
     pub async fn encode_qr_video(
         &self,
         qr_images: &[DynamicImage],
@@ -68,29 +68,26 @@ impl VideoEncoder {
         codec: Codec,
     ) -> Result<VideoStats> {
         // In a real implementation, this would use FFmpeg to create an actual video
-        // For now, we'll create a simple image sequence and metadata
-        
+        // For now, we'll create a simple image sequence and metadata with optimized I/O
+
         tracing::info!("Encoding {} frames to {} using {:?}", qr_images.len(), output_path, codec);
-        
+
         let codec_config = self.config.get_codec_config(codec.as_str())?;
         let start_time = std::time::Instant::now();
-        
+
         // Create output directory if it doesn't exist
         if let Some(parent) = Path::new(output_path).parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         // For this simplified version, we'll save the images as a sequence
         // and create a metadata file that represents the "video"
         let base_path = Path::new(output_path).with_extension("");
         let frames_dir = format!("{}_frames", base_path.to_string_lossy());
         std::fs::create_dir_all(&frames_dir)?;
-        
-        // Save each frame as an image
-        for (i, image) in qr_images.iter().enumerate() {
-            let frame_path = format!("{}/frame_{:06}.png", frames_dir, i);
-            image.save(&frame_path)?;
-        }
+
+        // Save frames in parallel batches for better performance
+        self.save_frames_optimized(qr_images, &frames_dir).await?;
         
         // Create a simple "video" metadata file
         let video_metadata = VideoMetadata {
@@ -118,6 +115,61 @@ impl VideoEncoder {
             width: codec_config.width,
             height: codec_config.height,
         })
+    }
+
+    /// Save frames in optimized batches with progress reporting
+    async fn save_frames_optimized(
+        &self,
+        qr_images: &[DynamicImage],
+        frames_dir: &str,
+    ) -> Result<()> {
+        use rayon::prelude::*;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::Arc;
+
+        let total_frames = qr_images.len();
+        let batch_size = std::cmp::min(100, std::cmp::max(10, total_frames / 20)); // Adaptive batch size
+        let progress_counter = Arc::new(AtomicUsize::new(0));
+
+        tracing::info!("Saving {} frames in batches of {}", total_frames, batch_size);
+
+        // Process frames in parallel batches
+        let results: Result<Vec<_>> = qr_images
+            .par_chunks(batch_size)
+            .enumerate()
+            .map(|(batch_idx, batch)| {
+                let batch_start = batch_idx * batch_size;
+                let progress = Arc::clone(&progress_counter);
+
+                // Save each frame in the batch
+                for (i, image) in batch.iter().enumerate() {
+                    let frame_idx = batch_start + i;
+                    let frame_path = format!("{}/frame_{:06}.png", frames_dir, frame_idx);
+
+                    // Use JPEG for better compression and speed on intermediate frames
+                    // PNG is more reliable but slower - keeping PNG for compatibility
+                    if let Err(e) = image.save(&frame_path) {
+                        return Err(crate::error::MemvidError::video(format!(
+                            "Failed to save frame {}: {}", frame_idx, e
+                        )));
+                    }
+
+                    // Update progress
+                    let completed = progress.fetch_add(1, Ordering::Relaxed) + 1;
+                    if completed % 100 == 0 || completed == total_frames {
+                        tracing::info!("Saved {}/{} frames ({:.1}%)",
+                            completed, total_frames,
+                            (completed as f64 / total_frames as f64) * 100.0);
+                    }
+                }
+
+                Ok(())
+            })
+            .collect();
+
+        results?;
+        tracing::info!("Successfully saved all {} frames", total_frames);
+        Ok(())
     }
 }
 
@@ -207,13 +259,13 @@ pub struct VideoInfo {
 
 /// Internal video metadata structure
 #[derive(serde::Serialize, serde::Deserialize)]
-struct VideoMetadata {
-    frame_count: u32,
-    fps: f64,
-    width: u32,
-    height: u32,
-    codec: String,
-    frames_dir: String,
+pub(crate) struct VideoMetadata {
+    pub frame_count: u32,
+    pub fps: f64,
+    pub width: u32,
+    pub height: u32,
+    pub codec: String,
+    pub frames_dir: String,
 }
 
 #[cfg(test)]
